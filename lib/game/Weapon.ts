@@ -8,6 +8,21 @@ export interface WeaponType {
   maxAmmo: number
 }
 
+export const WEAPON_TYPES: WeaponType[] = [
+  { name: 'Pistol', damage: 10, fireRate: 300, ammo: 50, maxAmmo: 50 },
+  { name: 'Shotgun', damage: 25, fireRate: 800, ammo: 20, maxAmmo: 20 },
+  { name: 'SMG', damage: 6, fireRate: 100, ammo: 120, maxAmmo: 120 },
+  { name: 'Rifle', damage: 35, fireRate: 500, ammo: 30, maxAmmo: 30 },
+  { name: 'Sniper', damage: 100, fireRate: 1500, ammo: 8, maxAmmo: 8 },
+  { name: 'Minigun', damage: 4, fireRate: 50, ammo: 300, maxAmmo: 300 },
+  { name: 'Rocket Launcher', damage: 200, fireRate: 2000, ammo: 5, maxAmmo: 5 },
+  { name: 'Laser Rifle', damage: 15, fireRate: 150, ammo: 80, maxAmmo: 80 },
+  // NEW WEAPONS
+  { name: 'Flamethrower', damage: 8, fireRate: 30, ammo: 200, maxAmmo: 200 },
+  { name: 'Rail Gun', damage: 500, fireRate: 3000, ammo: 2, maxAmmo: 2 },
+  { name: 'Grenade Launcher', damage: 120, fireRate: 2000, ammo: 4, maxAmmo: 4 },
+]
+
 export class Bullet extends Phaser.Physics.Arcade.Sprite {
   public damage: number
 

@@ -315,6 +315,11 @@ const INITIAL_BUILDINGS: Building[] = [
   { id: 'universe', name: 'Universe Factory', description: 'Creates pocket universes of dots', baseCost: 100000000000000, baseDps: 300000000, owned: 0, icon: '🌐', color: '#1e3799', unlockAt: 5000000000000 },
   { id: 'multiverse', name: 'Multiverse Engine', description: 'Infinite realities = infinite dots', baseCost: 1000000000000000, baseDps: 2000000000, owned: 0, icon: '♾️', color: '#6c3483', unlockAt: 50000000000000 },
   { id: 'godforge', name: 'God Forge', description: 'Divine dot creation', baseCost: 10000000000000000, baseDps: 15000000000, owned: 0, icon: '⚡', color: '#ffd700', unlockAt: 500000000000000 },
+  { id: 'entropy', name: 'Entropy Harvester', description: 'Harvests chaos into dots', baseCost: 100000000000000000, baseDps: 100000000000, owned: 0, icon: '🌀', color: '#ff00ff', unlockAt: 5000000000000000 },
+  { id: 'reality', name: 'Reality Compiler', description: 'Compiles new realities of dots', baseCost: 1000000000000000000, baseDps: 800000000000, owned: 0, icon: '💠', color: '#00ffcc', unlockAt: 50000000000000000 },
+  { id: 'existence', name: 'Existence Engine', description: 'Runs the engine of existence', baseCost: 50000000000000000000, baseDps: 5000000000000, owned: 0, icon: '⚛️', color: '#ff6600', unlockAt: 500000000000000000 },
+  { id: 'infinity', name: 'Infinity Loop', description: 'Loops infinity for infinite dots', baseCost: 500000000000000000000, baseDps: 40000000000000, owned: 0, icon: '♾️', color: '#9900ff', unlockAt: 5000000000000000000 },
+  { id: 'thesingularity', name: 'The Singularity', description: 'The ultimate dot source', baseCost: 10000000000000000000000, baseDps: 500000000000000, owned: 0, icon: '🔮', color: '#ffffff', unlockAt: 50000000000000000000 },
 ]
 
 const INITIAL_UPGRADES: Upgrade[] = [
@@ -429,6 +434,30 @@ const INITIAL_UPGRADES: Upgrade[] = [
   { id: 'global6', name: 'Efficiency VI', description: '+300% all production', cost: 1000000000, multiplier: 4.0, type: 'global', purchased: false, icon: '💥', unlockAt: 500000000 },
   { id: 'global7', name: 'Efficiency VII', description: '+500% all production', cost: 10000000000, multiplier: 6.0, type: 'global', purchased: false, icon: '⚡', unlockAt: 5000000000 },
   { id: 'global8', name: 'Efficiency VIII', description: '+1000% all production', cost: 100000000000, multiplier: 11.0, type: 'global', purchased: false, icon: '🌈', unlockAt: 50000000000 },
+
+  // Building upgrades - Entropy Harvester (3 upgrades)
+  { id: 'entropy_up1', name: 'Chaos Engine', description: 'Entropy Harvesters 2x effective', cost: 500000000000000000, multiplier: 2, type: 'building', targetBuilding: 'entropy', purchased: false, icon: '🌀', unlockAt: 100000000000000000 },
+  { id: 'entropy_up2', name: 'Entropy Overflow', description: 'Entropy Harvesters 2x effective', cost: 5000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'entropy', purchased: false, icon: '💫', unlockAt: 1000000000000000000 },
+  { id: 'entropy_up3', name: 'Chaos Mastery', description: 'Entropy Harvesters 2x effective', cost: 50000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'entropy', purchased: false, icon: '🔮', unlockAt: 10000000000000000000 },
+
+  // Building upgrades - Reality Compiler (3 upgrades)
+  { id: 'reality_up1', name: 'Code Injection', description: 'Reality Compilers 2x effective', cost: 5000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'reality', purchased: false, icon: '💻', unlockAt: 1000000000000000000 },
+  { id: 'reality_up2', name: 'Source Override', description: 'Reality Compilers 2x effective', cost: 50000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'reality', purchased: false, icon: '📡', unlockAt: 10000000000000000000 },
+  { id: 'reality_up3', name: 'Reality Rewrite', description: 'Reality Compilers 2x effective', cost: 500000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'reality', purchased: false, icon: '🌐', unlockAt: 100000000000000000000 },
+
+  // Building upgrades - Existence Engine (3 upgrades)
+  { id: 'existence_up1', name: 'Existential Boost', description: 'Existence Engines 2x effective', cost: 250000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'existence', purchased: false, icon: '⚙️', unlockAt: 50000000000000000000 },
+  { id: 'existence_up2', name: 'Being Amplifier', description: 'Existence Engines 2x effective', cost: 2500000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'existence', purchased: false, icon: '🔋', unlockAt: 500000000000000000000 },
+  { id: 'existence_up3', name: 'Ontological Engine', description: 'Existence Engines 2x effective', cost: 25000000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'existence', purchased: false, icon: '💎', unlockAt: 5000000000000000000000 },
+
+  // Building upgrades - Infinity Loop (3 upgrades)
+  { id: 'infinity_up1', name: 'Double Infinity', description: 'Infinity Loops 2x effective', cost: 2500000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'infinity', purchased: false, icon: '♾️', unlockAt: 500000000000000000000 },
+  { id: 'infinity_up2', name: 'Infinite Recursion', description: 'Infinity Loops 2x effective', cost: 25000000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'infinity', purchased: false, icon: '🔄', unlockAt: 5000000000000000000000 },
+  { id: 'infinity_up3', name: 'Beyond Infinity', description: 'Infinity Loops 2x effective', cost: 250000000000000000000000, multiplier: 2, type: 'building', targetBuilding: 'infinity', purchased: false, icon: '🌌', unlockAt: 50000000000000000000000 },
+
+  // Global upgrades - Endgame
+  { id: 'void_touch', name: 'Void Touch', description: '3x all production', cost: 10000000000000000000, multiplier: 3.0, type: 'global', purchased: false, icon: '🌑', unlockAt: 1000000000000000000 },
+  { id: 'reality_warp', name: 'Reality Warp', description: '+1000 dots per click', cost: 50000000000000000000, multiplier: 1000, type: 'click', purchased: false, icon: '🌀', unlockAt: 5000000000000000000 },
 ]
 
 const INITIAL_ACHIEVEMENTS: Achievement[] = [
@@ -482,6 +511,18 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: 'synergy_1', name: 'Cross-Game Newbie', description: 'Clear 1 DotSlayer floor', condition: (s) => s.slayerFloorsCleared >= 1, reward: 10, unlocked: false, icon: '🔗' },
   { id: 'synergy_10', name: 'Synergy Seeker', description: 'Clear 10 DotSlayer floors', condition: (s) => s.slayerFloorsCleared >= 10, reward: 25, unlocked: false, icon: '⚔️' },
   { id: 'synergy_50', name: 'Dual Master', description: 'Clear 50 DotSlayer floors', condition: (s) => s.slayerFloorsCleared >= 50, reward: 50, unlocked: false, icon: '🎮' },
+
+  // Expansion achievements
+  { id: 'dots_1q', name: 'Quadrillionaire', description: 'Earn 1 quadrillion dots', condition: (s) => s.totalDots >= 1000000000000000, reward: 150, unlocked: false, icon: '💎' },
+  { id: 'dots_1qi', name: 'Quintillionaire', description: 'Earn 1 quintillion dots', condition: (s) => s.totalDots >= 1000000000000000000, reward: 300, unlocked: false, icon: '🌟' },
+  { id: 'building_500', name: 'Building Baron', description: 'Own 500 total buildings', condition: (s) => s.buildings.reduce((a, b) => a + b.owned, 0) >= 500, reward: 75, unlocked: false, icon: '🏗️' },
+  { id: 'building_1000', name: 'Building Emperor', description: 'Own 1000 total buildings', condition: (s) => s.buildings.reduce((a, b) => a + b.owned, 0) >= 1000, reward: 150, unlocked: false, icon: '🏰' },
+  { id: 'prestige_50', name: 'Prestige Master', description: 'Prestige 50 times', condition: (s) => s.totalPrestiges >= 50, reward: 100, unlocked: false, icon: '🌠' },
+  { id: 'ascension_10', name: 'Ascension Lord', description: 'Ascend 10 times', condition: (s) => s.totalAscensions >= 10, reward: 200, unlocked: false, icon: '👑' },
+  { id: 'combo_500', name: 'Combo Emperor', description: 'Reach 500 combo', condition: (s) => s.maxCombo >= 500, reward: 75, unlocked: false, icon: '🔥' },
+  { id: 'crits_10000', name: 'Crit Emperor', description: 'Land 10,000 crits', condition: (s) => s.totalCrits >= 10000, reward: 75, unlocked: false, icon: '⚡' },
+  { id: 'golden_1000', name: 'Golden Shower', description: 'Click 1000 golden dots', condition: (s) => s.totalGoldenClicks >= 1000, reward: 100, unlocked: false, icon: '🌧️' },
+  { id: 'synergy_master', name: 'Synergy Master', description: 'Clear 50 DotSlayer floors with synergy active', condition: (s) => s.slayerFloorsCleared >= 50 && s.synergyBonus > 0, reward: 200, unlocked: false, icon: '🔗' },
 ]
 
 // ============= PRESTIGE UPGRADES (Bought with Prestige Points) =============
@@ -544,6 +585,15 @@ const INITIAL_PRESTIGE_UPGRADES: PrestigeUpgrade[] = [
   { id: 'p_omega_click', name: 'Omega Click', description: '1% chance for 10000x click', cost: 800, effect: 'omegaClick', purchased: false, icon: '🌟', tier: 7 },
   { id: 'p_eternal_growth', name: 'Eternal Growth', description: '+1% production per second (stacks)', cost: 900, effect: 'eternalGrowth', purchased: false, icon: '📈', tier: 7 },
   { id: 'p_god_mode', name: 'God Mode', description: '+1000% to EVERYTHING', cost: 1000, effect: 'godMode', purchased: false, icon: '🌌', tier: 7 },
+
+  // Tier 7 - Transcendent (continued)
+  { id: 'p_void_resonance', name: 'Void Resonance', description: 'All buildings cost 25% less', cost: 750, effect: 'voidResonance', purchased: false, icon: '🌑', tier: 7 },
+  { id: 'p_temporal_echo', name: 'Temporal Echo', description: 'Every click counts double', cost: 850, effect: 'temporalEcho', purchased: false, icon: '⏳', tier: 7 },
+
+  // Tier 8 - Omnipotent (1200-2000 points)
+  { id: 'p_reality_anchor', name: 'Reality Anchor', description: 'Start with 1 billion dots after prestige', cost: 1200, effect: 'realityAnchor', purchased: false, icon: '⚓', tier: 8 },
+  { id: 'p_entropy_shield', name: 'Entropy Shield', description: 'Offline earnings = 100% of online rate', cost: 1500, effect: 'entropyShield', purchased: false, icon: '🛡️', tier: 8 },
+  { id: 'p_cosmic_convergence', name: 'Cosmic Convergence', description: 'All multipliers +50%', cost: 2000, effect: 'cosmicConvergence', purchased: false, icon: '🌌', tier: 8 },
 ]
 
 // ============= HELPER FUNCTIONS =============
@@ -554,7 +604,10 @@ function formatNumber(n: number): string {
   if (n < 1000000000) return (n / 1000000).toFixed(2) + 'M'
   if (n < 1000000000000) return (n / 1000000000).toFixed(2) + 'B'
   if (n < 1000000000000000) return (n / 1000000000000).toFixed(2) + 'T'
-  return (n / 1000000000000000).toFixed(2) + 'Q'
+  if (n < 1000000000000000000) return (n / 1000000000000000).toFixed(2) + 'Q'
+  if (n < 1000000000000000000000) return (n / 1000000000000000000).toFixed(2) + 'Qi'
+  if (n < 1000000000000000000000000) return (n / 1000000000000000000000).toFixed(2) + 'Sx'
+  return (n / 1000000000000000000000000).toFixed(2) + 'Sp'
 }
 
 function formatTime(seconds: number): string {
@@ -631,6 +684,11 @@ function calculateDps(state: GameState): number {
     dps *= 11
   }
 
+  // Tier 8: Cosmic Convergence - all multipliers +50%
+  if (state.prestigeUpgrades?.some(u => u.effect === 'cosmicConvergence' && u.purchased)) {
+    dps *= 1.5
+  }
+
   // Ascension bonus: +15% per ascension level
   if (state.ascensionLevel > 0) {
     dps *= (1 + state.ascensionLevel * 0.15)
@@ -687,6 +745,16 @@ function calculateClickPower(state: GameState): number {
   // Tier 7: +1000% to everything
   if (state.prestigeUpgrades?.some(u => u.effect === 'godMode' && u.purchased)) {
     power *= 11
+  }
+
+  // Tier 7: Temporal Echo - clicks count double
+  if (state.prestigeUpgrades?.some(u => u.effect === 'temporalEcho' && u.purchased)) {
+    power *= 2
+  }
+
+  // Tier 8: Cosmic Convergence - all multipliers +50%
+  if (state.prestigeUpgrades?.some(u => u.effect === 'cosmicConvergence' && u.purchased)) {
+    power *= 1.5
   }
 
   // Ascension bonus: +15% per ascension level
@@ -889,7 +957,8 @@ export default function DotClicker() {
       const offlineTime = (Date.now() - lastSaveTime) / 1000
       if (offlineTime > 10) {
         const offlineDps = calculateDps(mergedState)
-        const offlineRate = 0.5 + mergedState.offlineMultiplier
+        const hasEntropyShield = mergedState.prestigeUpgrades?.some((u: PrestigeUpgrade) => u.effect === 'entropyShield' && u.purchased)
+        const offlineRate = hasEntropyShield ? 1.0 : (0.5 + mergedState.offlineMultiplier)
         // Max 24 hours of offline earnings
         const effectiveTime = Math.min(offlineTime, 24 * 60 * 60)
         const offlineEarnings = offlineDps * effectiveTime * offlineRate
@@ -1338,10 +1407,12 @@ export default function DotClicker() {
     const building = gameState.buildings.find(b => b.id === buildingId)
     if (!building) return
 
+    const hasVoidResonance = gameState.prestigeUpgrades?.some(u => u.effect === 'voidResonance' && u.purchased)
+    const costMultiplier = hasVoidResonance ? 0.75 : 1
     let totalCost = 0
     let tempOwned = building.owned
     for (let i = 0; i < amount; i++) {
-      totalCost += Math.floor(building.baseCost * Math.pow(1.15, tempOwned))
+      totalCost += Math.floor(building.baseCost * Math.pow(1.15, tempOwned) * costMultiplier)
       tempOwned++
     }
 
@@ -1404,7 +1475,8 @@ export default function DotClicker() {
 
     // Check for start dots bonus
     const hasStartDots = gameState.prestigeUpgrades?.some(u => u.effect === 'startDots' && u.purchased)
-    const startingDots = hasStartDots ? 1000 : 0
+    const hasRealityAnchor = gameState.prestigeUpgrades?.some(u => u.effect === 'realityAnchor' && u.purchased)
+    const startingDots = hasRealityAnchor ? 1000000000 : (hasStartDots ? 1000 : 0)
 
     // Get crit boost from prestige upgrades
     const hasCritBoost = gameState.prestigeUpgrades?.some(u => u.effect === 'critBoost' && u.purchased)

@@ -227,7 +227,128 @@ export const ITEM_POOL: ItemDefinition[] = [
     },
     description: '+50% Speed!',
     color: 0x00d9ff
-  }
+  },
+  // ═══════════════════════════════════════════════════════════════
+  // EXPANSION ITEMS - New powerful drops!
+  // ═══════════════════════════════════════════════════════════════
+  {
+    id: 'void_shard',
+    name: 'Void Shard',
+    rarity: ItemRarity.EPIC,
+    effect: (player) => {
+      if (player.shopDamageBonus !== undefined) {
+        player.shopDamageBonus += 15
+      }
+    },
+    description: '+15% Damage to Void Enemies',
+    color: 0x2d0050
+  },
+  {
+    id: 'mechanical_core',
+    name: 'Mechanical Core',
+    rarity: ItemRarity.RARE,
+    effect: (player) => {
+      if (player.shopDamageBonus !== undefined) {
+        player.shopDamageBonus += 20
+      }
+    },
+    description: '+20% Damage to Mech Enemies',
+    color: 0x44aaff
+  },
+  {
+    id: 'time_crystal',
+    name: 'Time Crystal',
+    rarity: ItemRarity.LEGENDARY,
+    effect: (player) => {
+      if (player.shopDamageBonus !== undefined) player.shopDamageBonus += 10
+      if (player.shopSpeedBonus !== undefined) player.shopSpeedBonus += 10
+      if (player.shopFireRateBonus !== undefined) player.shopFireRateBonus += 10
+    },
+    description: '+10% All Stats This Run!',
+    color: 0xf9ca24
+  },
+  {
+    id: 'phoenix_feather',
+    name: 'Phoenix Feather',
+    rarity: ItemRarity.LEGENDARY,
+    effect: (player) => {
+      player.maxHealth += 100
+      player.heal(player.maxHealth)
+    },
+    description: 'Auto-Revive with 50% HP!',
+    color: 0xff6600
+  },
+  {
+    id: 'berserkers_rage',
+    name: "Berserker's Rage",
+    rarity: ItemRarity.EPIC,
+    effect: (player) => {
+      if (player.shopDamageBonus !== undefined) {
+        player.shopDamageBonus += 30
+      }
+    },
+    description: '+30% Damage, -15% Defense',
+    color: 0xe74c3c
+  },
+  {
+    id: 'shadow_cloak',
+    name: 'Shadow Cloak',
+    rarity: ItemRarity.RARE,
+    effect: (player) => {
+      if (player.shopSpeedBonus !== undefined) {
+        player.shopSpeedBonus += 20
+      }
+    },
+    description: '+20% Dodge Chance',
+    color: 0x2c3e50
+  },
+  {
+    id: 'plasma_battery',
+    name: 'Plasma Battery',
+    rarity: ItemRarity.UNCOMMON,
+    effect: (player) => {
+      if (player.shopAmmoBonus !== undefined) {
+        player.shopAmmoBonus += 100
+      }
+    },
+    description: '+100 Max Ammo',
+    color: 0x00ccff
+  },
+  {
+    id: 'healing_totem',
+    name: 'Healing Totem',
+    rarity: ItemRarity.RARE,
+    effect: (player) => {
+      player.heal(100)
+      player.maxHealth += 30
+    },
+    description: 'Regen 3 HP/sec for Run',
+    color: 0x2ecc71
+  },
+  {
+    id: 'gold_magnet',
+    name: 'Gold Magnet',
+    rarity: ItemRarity.UNCOMMON,
+    effect: (player) => {
+      if (player.shopDamageBonus !== undefined) {
+        player.shopDamageBonus += 5
+      }
+    },
+    description: '+50% Gold Drops',
+    color: 0xffd700
+  },
+  {
+    id: 'xp_catalyst',
+    name: 'XP Catalyst',
+    rarity: ItemRarity.EPIC,
+    effect: (player) => {
+      if (player.shopDamageBonus !== undefined) {
+        player.shopDamageBonus += 10
+      }
+    },
+    description: '+40% XP Gains',
+    color: 0x9b59b6
+  },
 ]
 
 export class ItemDrop extends Phaser.Physics.Arcade.Sprite {

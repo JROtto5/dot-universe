@@ -432,7 +432,166 @@ export const ACHIEVEMENTS: Achievement[] = [
     condition: (stats) => stats.totalKills >= 10000,
     tier: 'platinum',
     color: 0xff0266
-  }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // EXPANSION ACHIEVEMENTS - New endgame milestones!
+  // ═══════════════════════════════════════════════════════════════
+
+  // Floor progression (expanded)
+  {
+    id: 'floor_110',
+    name: 'Into the Void',
+    description: 'Reach Floor 110',
+    icon: '🌑',
+    condition: (stats) => stats.floorsCompleted >= 110,
+    tier: 'gold',
+    color: 0xffd700
+  },
+  {
+    id: 'floor_125',
+    name: 'Mechanical Mayhem',
+    description: 'Reach Floor 125',
+    icon: '🤖',
+    condition: (stats) => stats.floorsCompleted >= 125,
+    tier: 'gold',
+    color: 0xffd700
+  },
+  {
+    id: 'floor_150',
+    name: 'The Architect Falls',
+    description: 'Beat all 150 floors!',
+    icon: '🏛️',
+    condition: (stats) => stats.floorsCompleted >= 150,
+    tier: 'platinum',
+    color: 0xff0266
+  },
+
+  // Kill milestones (expanded)
+  {
+    id: 'kills_2500',
+    name: 'Mass Extinction',
+    description: 'Kill 2500 enemies total',
+    icon: '🌋',
+    condition: (stats) => stats.totalKills >= 2500,
+    tier: 'platinum',
+    color: 0x00d9ff
+  },
+
+  // Boss milestones (expanded)
+  {
+    id: 'boss_10_exp',
+    name: 'Boss Massacre',
+    description: 'Defeat 10 bosses',
+    icon: '👹',
+    condition: (stats) => stats.bossesKilled >= 10,
+    tier: 'gold',
+    color: 0xffd700
+  },
+  {
+    id: 'boss_15',
+    name: 'Legendary Slayer',
+    description: 'Defeat 15 bosses!',
+    icon: '🗡️',
+    condition: (stats) => stats.bossesKilled >= 15,
+    tier: 'platinum',
+    color: 0x00d9ff
+  },
+
+  // Combo milestones (expanded)
+  {
+    id: 'combo_150',
+    name: 'Combo Transcendence',
+    description: 'Achieve a 150x combo!',
+    icon: '💫',
+    condition: (stats) => stats.highestCombo >= 150,
+    tier: 'platinum',
+    color: 0x00d9ff
+  },
+  {
+    id: 'combo_200',
+    name: 'Infinite Combo',
+    description: 'Achieve a 200x combo!',
+    icon: '♾️',
+    condition: (stats) => stats.highestCombo >= 200,
+    tier: 'platinum',
+    color: 0xff0266
+  },
+
+  // Item collection (expanded)
+  {
+    id: 'legendaries_25',
+    name: 'Hoarder',
+    description: 'Collect 25 legendary items',
+    icon: '💎',
+    condition: (stats) => stats.legendariesCollected >= 25,
+    tier: 'gold',
+    color: 0xffd700
+  },
+
+  // Money milestones (expanded)
+  {
+    id: 'money_500k',
+    name: 'Fortune',
+    description: 'Earn $500,000',
+    icon: '💸',
+    condition: (stats) => stats.totalMoney >= 500000,
+    tier: 'gold',
+    color: 0xffd700
+  },
+  {
+    id: 'money_1m',
+    name: 'True Millionaire',
+    description: 'Earn $1,000,000!',
+    icon: '🏦',
+    condition: (stats) => stats.totalMoney >= 1000000,
+    tier: 'platinum',
+    color: 0xff0266
+  },
+
+  // Damage milestones (expanded)
+  {
+    id: 'damage_1m_exp',
+    name: 'Devastation',
+    description: 'Deal 1,000,000 total damage',
+    icon: '💥',
+    condition: (stats) => stats.damageDealt >= 1000000,
+    tier: 'gold',
+    color: 0xffd700
+  },
+
+  // Critical hit milestones (expanded)
+  {
+    id: 'crits_500_exp',
+    name: 'Precision Master',
+    description: 'Land 500 critical hits',
+    icon: '🎯',
+    condition: (stats) => stats.criticalHits >= 500,
+    tier: 'gold',
+    color: 0xffd700
+  },
+
+  // Special challenge
+  {
+    id: 'pacifist_floor',
+    name: 'Pacifist',
+    description: 'Complete a floor without shooting',
+    icon: '☮️',
+    condition: (stats) => stats.floorsWithoutDamage >= 1 && stats.enemiesKilledThisRun === 0,
+    tier: 'platinum',
+    color: 0x00d9ff
+  },
+
+  // Streak
+  {
+    id: 'killstreak_750',
+    name: 'Legendary Rampage',
+    description: 'Kill 750 enemies in one run!',
+    icon: '👑',
+    condition: (stats) => stats.enemiesKilledThisRun >= 750,
+    tier: 'platinum',
+    color: 0xff0266
+  },
 ]
 
 export class AchievementManager {

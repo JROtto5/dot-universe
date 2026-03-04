@@ -59,6 +59,14 @@ const WEEKLY_CHALLENGE_TEMPLATES: Omit<WeeklyChallenge, 'id'>[] = [
   { name: 'Tower Master', description: 'Complete 500 floors this week', icon: '👑', type: 'floors', target: 500, reward: { gold: 200000, title: 'Tower Master', badge: 'tower_master' }, tier: 'diamond' },
   { name: 'Speedrun Legend', description: 'Win 10 games this week', icon: '⚡', type: 'victories', target: 10, reward: { gold: 250000, title: 'Speedrun Legend', badge: 'speedrun' }, tier: 'diamond' },
   { name: 'Dedicated Player', description: 'Play for 10 hours this week', icon: '⏰', type: 'playtime', target: 600, reward: { gold: 100000, title: 'Dedicated', badge: 'dedicated' }, tier: 'diamond' },
+
+  // EXPANSION: New challenge templates
+  { name: 'Void Hunter', description: 'Kill 100 void enemies this week', icon: '🌑', type: 'kills', target: 100, reward: { gold: 200000, title: 'Void Hunter', badge: 'void_hunter' }, tier: 'diamond' },
+  { name: 'Mechanical Destroyer', description: 'Kill 100 mechanical enemies', icon: '🤖', type: 'kills', target: 100, reward: { gold: 75000, title: 'Mech Destroyer', badge: 'mech_destroyer' }, tier: 'gold' },
+  { name: 'Deep Descent', description: 'Reach floor 120 this week', icon: '🕳️', type: 'floors', target: 120, reward: { gold: 250000, title: 'Deep Diver', badge: 'deep_diver' }, tier: 'diamond' },
+  { name: 'Untouchable Legend', description: 'Complete 10 floors without damage', icon: '🛡️', type: 'perfect_floors', target: 10, reward: { gold: 300000, title: 'Untouchable Legend', badge: 'untouchable' }, tier: 'diamond' },
+  { name: 'Speed Demon', description: 'Clear 20 floors in under 15 min', icon: '⚡', type: 'floors', target: 20, reward: { gold: 80000, title: 'Speed Demon', badge: 'speed_demon' }, tier: 'gold' },
+  { name: 'Combo Titan', description: 'Reach 200x combo this week', icon: '💫', type: 'combo', target: 200, reward: { gold: 200000, title: 'Combo Titan', badge: 'combo_titan' }, tier: 'diamond' },
 ]
 
 export class WeeklyChallengeManager {

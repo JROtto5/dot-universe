@@ -16,7 +16,10 @@ export interface ShopItem {
           'healthRegen' | 'dodgeChance' | 'luck' | 'armor' | 'lifesteal' | 'comboBonus' |
           'teleport' | 'berserk' | 'invisibility' | 'orbitalStrike' |
           'explosiveRounds' | 'lifeDrain' | 'bulletTime' |
-          'autoClick' | 'autoReload'
+          'autoClick' | 'autoReload' |
+          'voidArmor' | 'neuralLink' | 'quantumStabilizer' | 'nanoSwarm' |
+          'phaseShift' | 'magneticField' | 'adrenalineInjector' | 'scrapCollector' |
+          'overclockModule' | 'emergencyProtocol'
     value: number
   }
 }
@@ -485,6 +488,120 @@ export const SHOP_ITEMS: ShopItem[] = [
     maxLevel: 10,
     priceScaling: 1.5,
     effect: { type: 'ammo', value: 50 }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // ULTIMATE CATEGORY - Endgame power items!
+  // ═══════════════════════════════════════════════════════════════
+  {
+    id: 'void_armor',
+    name: 'Void Armor',
+    description: '+20% damage reduction per level',
+    icon: '🌑',
+    category: 'stat',
+    basePrice: 5000,
+    maxLevel: 3,
+    priceScaling: 2.0,
+    effect: { type: 'voidArmor', value: 0.20 }
+  },
+  {
+    id: 'neural_link',
+    name: 'Neural Link',
+    description: '+25% all stats per level',
+    icon: '🧠',
+    category: 'stat',
+    basePrice: 8000,
+    maxLevel: 3,
+    priceScaling: 2.5,
+    effect: { type: 'neuralLink', value: 0.25 }
+  },
+  {
+    id: 'quantum_stabilizer',
+    name: 'Quantum Stabilizer',
+    description: '+30% crit damage per level',
+    icon: '⚛️',
+    category: 'weapon',
+    basePrice: 3000,
+    maxLevel: 5,
+    priceScaling: 1.8,
+    effect: { type: 'quantumStabilizer', value: 0.30 }
+  },
+  {
+    id: 'nano_swarm',
+    name: 'Nano Swarm',
+    description: 'Auto-damages nearby enemies',
+    icon: '🐝',
+    category: 'ability',
+    basePrice: 6000,
+    maxLevel: 3,
+    priceScaling: 2.0,
+    effect: { type: 'nanoSwarm', value: 1 }
+  },
+  {
+    id: 'phase_shift',
+    name: 'Phase Shift',
+    description: '+10% dodge chance per level',
+    icon: '👻',
+    category: 'stat',
+    basePrice: 4000,
+    maxLevel: 5,
+    priceScaling: 1.9,
+    effect: { type: 'phaseShift', value: 0.10 }
+  },
+  {
+    id: 'magnetic_field',
+    name: 'Magnetic Field',
+    description: '+40% pickup range per level',
+    icon: '🧲',
+    category: 'stat',
+    basePrice: 2000,
+    maxLevel: 3,
+    priceScaling: 1.5,
+    effect: { type: 'magneticField', value: 0.40 }
+  },
+  {
+    id: 'adrenaline_injector',
+    name: 'Adrenaline Injector',
+    description: '+15% fire rate when below 50% HP',
+    icon: '💉',
+    category: 'stat',
+    basePrice: 3500,
+    maxLevel: 3,
+    priceScaling: 1.8,
+    effect: { type: 'adrenalineInjector', value: 0.15 }
+  },
+  {
+    id: 'scrap_collector',
+    name: 'Scrap Collector',
+    description: '+20% ammo from kills per level',
+    icon: '🔩',
+    category: 'stat',
+    basePrice: 2500,
+    maxLevel: 5,
+    priceScaling: 1.6,
+    effect: { type: 'scrapCollector', value: 0.20 }
+  },
+  {
+    id: 'overclock_module',
+    name: 'Overclock Module',
+    description: '+20% movement during combat',
+    icon: '⚙️',
+    category: 'stat',
+    basePrice: 4500,
+    maxLevel: 3,
+    priceScaling: 1.8,
+    effect: { type: 'overclockModule', value: 0.20 }
+  },
+  {
+    id: 'emergency_protocol',
+    name: 'Emergency Protocol',
+    description: 'Auto-heal 25% HP once per floor when dying',
+    icon: '🚨',
+    category: 'ability',
+    basePrice: 15000,
+    maxLevel: 1,
+    priceScaling: 1,
+    effect: { type: 'emergencyProtocol', value: 1 }
   },
 
   // TESTING: Free automation items!

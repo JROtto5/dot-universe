@@ -24,6 +24,8 @@ export enum StatusType {
   // Debuffs
   WEAKNESS = 'weakness',
   VULNERABILITY = 'vulnerability',
+  EMPOWER = 'empower',
+  DRAIN = 'drain',
 }
 
 export interface StatusEffect {
@@ -143,6 +145,22 @@ export const STATUS_CONFIGS: Record<StatusType, StatusConfig> = {
     tickInterval: 0,
     color: 0xc0392b,
     icon: '🎯'
+  },
+  [StatusType.EMPOWER]: {
+    duration: 6000,
+    intensity: 0.15, // 15% more damage dealt per stack
+    maxStacks: 5,
+    tickInterval: 0,
+    color: 0xf39c12,
+    icon: '⚔️'
+  },
+  [StatusType.DRAIN]: {
+    duration: 5000,
+    intensity: 0.02, // 2% max HP per tick
+    maxStacks: 2,
+    tickInterval: 1000,
+    color: 0x6c3483,
+    icon: '🩸'
   }
 }
 
@@ -273,6 +291,11 @@ export class StatusEffectManager {
         const heal = effect.intensity * effect.stackCount
         this.onHealCallback?.(heal, type)
         break
+
+      case StatusType.DRAIN:
+        const drainDamage = effect.intensity * effect.stackCount
+        this.onDamageCallback?.(drainDamage, type)
+        break
     }
   }
 
@@ -317,6 +340,12 @@ export class StatusEffectManager {
     const boostEffect = this.effects.get(StatusType.DAMAGE_BOOST)
     if (boostEffect) {
       modifier *= (1 + boostEffect.intensity * boostEffect.stackCount)
+    }
+
+    // Empower (increases damage you deal)
+    const empowerEffect = this.effects.get(StatusType.EMPOWER)
+    if (empowerEffect) {
+      modifier *= (1 + empowerEffect.intensity * empowerEffect.stackCount)
     }
 
     // Weakness (reduces damage you deal)

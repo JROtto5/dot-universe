@@ -119,6 +119,53 @@ export const SKILLS: Record<string, Skill> = {
     icon: '⚔️',
     effects: { damage: 0.20 }
   },
+
+  // EXPANSION: Advanced Skills
+  vampiricMastery: {
+    id: 'vampiricMastery',
+    name: 'Vampiric Mastery',
+    description: '+3% Lifesteal per level',
+    maxLevel: 5,
+    cost: 1,
+    icon: '🧛',
+    effects: { health: 0.03 }
+  },
+  elementalAffinity: {
+    id: 'elementalAffinity',
+    name: 'Elemental Affinity',
+    description: '+10% Status Effect Damage per level',
+    maxLevel: 5,
+    cost: 1,
+    icon: '🔥',
+    effects: { damage: 0.10 }
+  },
+  momentum: {
+    id: 'momentum',
+    name: 'Momentum',
+    description: '+5% Damage per consecutive kill within 3s',
+    maxLevel: 5,
+    cost: 1,
+    icon: '💫',
+    effects: { damage: 0.05 }
+  },
+  scavenger: {
+    id: 'scavenger',
+    name: 'Scavenger',
+    description: '+15% Ammo from pickups per level',
+    maxLevel: 5,
+    cost: 1,
+    icon: '🔍',
+    effects: { luck: 0.15 }
+  },
+  ironWill: {
+    id: 'ironWill',
+    name: 'Iron Will',
+    description: '+8% Damage Reduction when below 30% HP',
+    maxLevel: 5,
+    cost: 1,
+    icon: '🛡️',
+    effects: { health: 0.08 }
+  },
 }
 
 export class SkillTreeManager {

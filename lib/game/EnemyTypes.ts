@@ -33,6 +33,24 @@ export enum EnemyType {
   CORRUPTED = 'corrupted',    // Leaves poison trails
   MIRROR = 'mirror',          // Reflects damage back
   BERSERKER_KING = 'berserker_king', // Ultimate berserker
+  // ═══════════════════════════════════════════════════════════════
+  // VOID TIER ENEMIES - Reality-bending threats from the abyss!
+  // ═══════════════════════════════════════════════════════════════
+  VOID_WALKER = 'void_walker',     // Phases in/out of reality
+  ENTROPY = 'entropy',             // Reduces player damage on hit
+  NULLIFIER = 'nullifier',         // Disables active power-ups
+  ABYSSAL = 'abyssal',             // Grows stronger over time
+  VOID_PROPHET = 'void_prophet',   // Buffs nearby void enemies
+  RIFT_STALKER = 'rift_stalker',   // Teleports behind player
+  // ═══════════════════════════════════════════════════════════════
+  // MECHANICAL TIER ENEMIES - Robotic precision threats!
+  // ═══════════════════════════════════════════════════════════════
+  DRONE = 'drone',                 // Fast formation flyer
+  SIEGE_BOT = 'siege_bot',         // Slow ranged mortar
+  OVERCLOCKER = 'overclocker',     // Speeds up nearby mechs
+  TESLA_COIL = 'tesla_coil',       // Stationary area zapper
+  ASSEMBLER = 'assembler',         // Builds mini-drones
+  MECH_TITAN = 'mech_titan',       // Heavy mech
 }
 
 export interface EnemyStats {
@@ -355,6 +373,156 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
     size: 36,
     behavior: 'berserker', // Ultimate rage mode
   },
+  // ═══════════════════════════════════════════════════════════════
+  // VOID TIER ENEMIES - Reality-bending threats!
+  // ═══════════════════════════════════════════════════════════════
+  [EnemyType.VOID_WALKER]: {
+    health: 350,
+    speed: 250,
+    damage: 35,
+    attackRange: 450,
+    attackSpeed: 1200,
+    moneyDrop: [200, 400],
+    xpDrop: [150, 280],
+    color: 0x2d0050,    // Purple-black
+    size: 22,
+    behavior: 'fast',   // Phases in/out
+  },
+  [EnemyType.ENTROPY]: {
+    health: 280,
+    speed: 180,
+    damage: 25,
+    attackRange: 400,
+    attackSpeed: 1500,
+    moneyDrop: [180, 350],
+    xpDrop: [130, 240],
+    color: 0x1a0033,    // Deep void
+    size: 20,
+    behavior: 'chase',  // Reduces player damage
+  },
+  [EnemyType.NULLIFIER]: {
+    health: 320,
+    speed: 160,
+    damage: 30,
+    attackRange: 400,
+    attackSpeed: 1800,
+    moneyDrop: [220, 440],
+    xpDrop: [160, 300],
+    color: 0x330066,    // Dark purple
+    size: 24,
+    behavior: 'chase',  // Disables power-ups
+  },
+  [EnemyType.ABYSSAL]: {
+    health: 200,
+    speed: 140,
+    damage: 20,
+    attackRange: 400,
+    attackSpeed: 1500,
+    moneyDrop: [160, 320],
+    xpDrop: [120, 220],
+    color: 0x0d001a,    // Near black
+    size: 18,
+    behavior: 'chase',  // Grows stronger over time
+  },
+  [EnemyType.VOID_PROPHET]: {
+    health: 250,
+    speed: 120,
+    damage: 20,
+    attackRange: 500,
+    attackSpeed: 2000,
+    moneyDrop: [250, 500],
+    xpDrop: [180, 340],
+    color: 0x4d0099,    // Vivid purple
+    size: 26,
+    behavior: 'ranged',  // Buffs nearby void enemies
+  },
+  [EnemyType.RIFT_STALKER]: {
+    health: 300,
+    speed: 300,
+    damage: 45,
+    attackRange: 500,
+    attackSpeed: 1000,
+    moneyDrop: [240, 480],
+    xpDrop: [170, 320],
+    color: 0x6600cc,    // Bright purple
+    size: 20,
+    behavior: 'fast',   // Teleports behind player
+  },
+  // ═══════════════════════════════════════════════════════════════
+  // MECHANICAL TIER ENEMIES - Robotic precision!
+  // ═══════════════════════════════════════════════════════════════
+  [EnemyType.DRONE]: {
+    health: 150,
+    speed: 350,
+    damage: 15,
+    attackRange: 400,
+    attackSpeed: 800,
+    moneyDrop: [80, 160],
+    xpDrop: [60, 110],
+    color: 0x88ccff,    // Light blue
+    size: 12,
+    behavior: 'fast',   // Formation flyer
+  },
+  [EnemyType.SIEGE_BOT]: {
+    health: 500,
+    speed: 80,
+    damage: 60,
+    attackRange: 700,
+    attackSpeed: 3000,
+    moneyDrop: [150, 300],
+    xpDrop: [100, 200],
+    color: 0x556677,    // Steel grey
+    size: 30,
+    behavior: 'ranged', // Slow mortar
+  },
+  [EnemyType.OVERCLOCKER]: {
+    health: 200,
+    speed: 160,
+    damage: 15,
+    attackRange: 400,
+    attackSpeed: 2000,
+    moneyDrop: [120, 240],
+    xpDrop: [90, 170],
+    color: 0x44aaff,    // Electric blue
+    size: 18,
+    behavior: 'ranged', // Speeds up nearby mechs
+  },
+  [EnemyType.TESLA_COIL]: {
+    health: 400,
+    speed: 0,
+    damage: 40,
+    attackRange: 250,
+    attackSpeed: 1000,
+    moneyDrop: [140, 280],
+    xpDrop: [100, 190],
+    color: 0x00ccff,    // Cyan
+    size: 22,
+    behavior: 'ranged', // Stationary zapper
+  },
+  [EnemyType.ASSEMBLER]: {
+    health: 350,
+    speed: 100,
+    damage: 20,
+    attackRange: 400,
+    attackSpeed: 2500,
+    moneyDrop: [160, 320],
+    xpDrop: [120, 220],
+    color: 0x3388bb,    // Teal blue
+    size: 24,
+    behavior: 'ranged', // Builds mini-drones
+  },
+  [EnemyType.MECH_TITAN]: {
+    health: 700,
+    speed: 70,
+    damage: 55,
+    attackRange: 400,
+    attackSpeed: 2000,
+    moneyDrop: [200, 400],
+    xpDrop: [150, 280],
+    color: 0x224466,    // Dark navy
+    size: 34,
+    behavior: 'tank',   // Heavy mech
+  },
 }
 
 export class AdvancedEnemy extends Phaser.Physics.Arcade.Sprite {
@@ -440,6 +608,20 @@ export class AdvancedEnemy extends Phaser.Physics.Arcade.Sprite {
       [EnemyType.CORRUPTED]: '☠️ CORRUPTED',
       [EnemyType.MIRROR]: '🪞 MIRROR DEMON',
       [EnemyType.BERSERKER_KING]: '👑 BERSERKER KING',
+      // VOID TIER
+      [EnemyType.VOID_WALKER]: '🌀 Void Walker',
+      [EnemyType.ENTROPY]: '🌑 Entropy',
+      [EnemyType.NULLIFIER]: '🚫 Nullifier',
+      [EnemyType.ABYSSAL]: '🕳️ Abyssal',
+      [EnemyType.VOID_PROPHET]: '🔮 Void Prophet',
+      [EnemyType.RIFT_STALKER]: '⚡ Rift Stalker',
+      // MECHANICAL TIER
+      [EnemyType.DRONE]: '🤖 Drone',
+      [EnemyType.SIEGE_BOT]: '🏗️ Siege Bot',
+      [EnemyType.OVERCLOCKER]: '⚡ Overclocker',
+      [EnemyType.TESLA_COIL]: '⚡ Tesla Coil',
+      [EnemyType.ASSEMBLER]: '🔧 Assembler',
+      [EnemyType.MECH_TITAN]: '🦾 MECH TITAN',
     }
 
     this.nameTag = scene.add.text(x, y - 35, typeNames[type], {
@@ -715,6 +897,261 @@ export class AdvancedEnemy extends Phaser.Physics.Arcade.Sprite {
             duration: 1000,
             onComplete: () => enrageText.destroy()
           })
+        }
+        break
+
+      // ═══════════════════════════════════════════════════════════════
+      // VOID TIER ENEMY ABILITIES
+      // ═══════════════════════════════════════════════════════════════
+
+      case EnemyType.VOID_WALKER:
+        // Phase in and out of reality every 3 seconds
+        if (currentTime - this.lastSpecialAbility > 3000) {
+          this.isPhased = !this.isPhased
+          this.setAlpha(this.isPhased ? 0.2 : 1)
+          if (!this.isPhased) {
+            // Flash when becoming solid
+            const voidFlash = this.scene.add.circle(this.x, this.y, 25, 0x2d0050, 0.6)
+            this.scene.tweens.add({
+              targets: voidFlash,
+              scale: 2,
+              alpha: 0,
+              duration: 300,
+              onComplete: () => voidFlash.destroy()
+            })
+          }
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.ENTROPY:
+        // Entropy aura visual - drains color from surroundings
+        if (Math.random() < 0.03) {
+          const drainEffect = this.scene.add.circle(this.x, this.y, 30, 0x1a0033, 0.4)
+          this.scene.tweens.add({
+            targets: drainEffect,
+            scale: 2,
+            alpha: 0,
+            duration: 600,
+            onComplete: () => drainEffect.destroy()
+          })
+        }
+        break
+
+      case EnemyType.NULLIFIER:
+        // Nullification pulse every 5 seconds
+        if (currentTime - this.lastSpecialAbility > 5000) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('nullifierPulse', {
+              detail: { x: this.x, y: this.y, radius: 200 }
+            }))
+          }
+          const nullPulse = this.scene.add.circle(this.x, this.y, 20, 0x330066, 0.5)
+          nullPulse.setStrokeStyle(3, 0x330066)
+          this.scene.tweens.add({
+            targets: nullPulse,
+            scale: 10,
+            alpha: 0,
+            duration: 800,
+            onComplete: () => nullPulse.destroy()
+          })
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.ABYSSAL:
+        // Grows 5% stronger every 3 seconds
+        if (currentTime - this.lastSpecialAbility > 3000) {
+          this.health = Math.min(this.maxHealth * 3, this.health * 1.05)
+          this.maxHealth = Math.max(this.maxHealth, this.health)
+          // Growth visual
+          const growEffect = this.scene.add.circle(this.x, this.y, 15, 0x0d001a, 0.6)
+          this.scene.tweens.add({
+            targets: growEffect,
+            scale: 1.5,
+            alpha: 0,
+            duration: 400,
+            onComplete: () => growEffect.destroy()
+          })
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.VOID_PROPHET:
+        // Buff nearby void enemies every 4 seconds
+        if (currentTime - this.lastSpecialAbility > 4000 && allEnemies) {
+          allEnemies.getChildren().forEach((enemy: any) => {
+            if (enemy !== this && enemy.active && enemy.enemyType &&
+                ['void_walker', 'entropy', 'nullifier', 'abyssal', 'rift_stalker'].includes(enemy.enemyType)) {
+              const dist = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y)
+              if (dist < 300) {
+                enemy.setTint(0x9900ff)
+                this.scene.time.delayedCall(500, () => {
+                  if (enemy.active) enemy.clearTint()
+                })
+              }
+            }
+          })
+          // Prophet aura
+          const prophetAura = this.scene.add.circle(this.x, this.y, 40, 0x4d0099, 0.3)
+          this.scene.tweens.add({
+            targets: prophetAura,
+            scale: 7,
+            alpha: 0,
+            duration: 600,
+            onComplete: () => prophetAura.destroy()
+          })
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.RIFT_STALKER:
+        // Teleport behind player every 3 seconds
+        if (currentTime - this.lastSpecialAbility > 3000) {
+          const angle2 = Phaser.Math.Angle.Between(player.x, player.y, this.x, this.y)
+          const behindX = player.x - Math.cos(angle2) * 80
+          const behindY = player.y - Math.sin(angle2) * 80
+          // Vanish effect
+          const riftVanish = this.scene.add.circle(this.x, this.y, 15, 0x6600cc, 0.8)
+          this.scene.tweens.add({
+            targets: riftVanish,
+            scale: 2,
+            alpha: 0,
+            duration: 200,
+            onComplete: () => riftVanish.destroy()
+          })
+          this.setPosition(
+            Phaser.Math.Clamp(behindX, 50, 3000 - 50),
+            Phaser.Math.Clamp(behindY, 50, 2000 - 50)
+          )
+          // Appear effect
+          const riftAppear = this.scene.add.circle(this.x, this.y, 20, 0x6600cc, 0.6)
+          this.scene.tweens.add({
+            targets: riftAppear,
+            scale: 0.5,
+            alpha: 0,
+            duration: 300,
+            onComplete: () => riftAppear.destroy()
+          })
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      // ═══════════════════════════════════════════════════════════════
+      // MECHANICAL TIER ENEMY ABILITIES
+      // ═══════════════════════════════════════════════════════════════
+
+      case EnemyType.DRONE:
+        // Drones flicker their lights
+        if (Math.random() < 0.02) {
+          this.setTint(0xffffff)
+          this.scene.time.delayedCall(100, () => {
+            if (this.active) this.clearTint()
+          })
+        }
+        break
+
+      case EnemyType.SIEGE_BOT:
+        // Mortar visual - charging shot
+        if (currentTime - this.lastSpecialAbility > 3000) {
+          this.setTint(0xff4444)
+          this.scene.time.delayedCall(500, () => {
+            if (this.active) this.clearTint()
+          })
+          // Fire mortar event
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('siegeMortar', {
+              detail: { x: player.x, y: player.y, damage: 40, radius: 100 }
+            }))
+          }
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.OVERCLOCKER:
+        // Speed up nearby mechs every 4 seconds
+        if (currentTime - this.lastSpecialAbility > 4000 && allEnemies) {
+          allEnemies.getChildren().forEach((enemy: any) => {
+            if (enemy !== this && enemy.active && enemy.enemyType &&
+                ['drone', 'siege_bot', 'tesla_coil', 'assembler', 'mech_titan'].includes(enemy.enemyType)) {
+              const dist = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y)
+              if (dist < 250) {
+                enemy.setTint(0x44aaff)
+                this.scene.time.delayedCall(400, () => {
+                  if (enemy.active) enemy.clearTint()
+                })
+              }
+            }
+          })
+          // Overclock pulse
+          const oclockPulse = this.scene.add.circle(this.x, this.y, 20, 0x44aaff, 0.4)
+          this.scene.tweens.add({
+            targets: oclockPulse,
+            scale: 6,
+            alpha: 0,
+            duration: 500,
+            onComplete: () => oclockPulse.destroy()
+          })
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.TESLA_COIL:
+        // Zap nearby player every 2 seconds
+        if (currentTime - this.lastSpecialAbility > 2000) {
+          const zapDist = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y)
+          if (zapDist < 250) {
+            // Lightning visual
+            const lightning = this.scene.add.graphics()
+            lightning.lineStyle(3, 0x00ccff, 0.8)
+            lightning.lineBetween(this.x, this.y, player.x, player.y)
+            this.scene.tweens.add({
+              targets: lightning,
+              alpha: 0,
+              duration: 200,
+              onComplete: () => lightning.destroy()
+            })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('teslaZap', {
+                detail: { x: this.x, y: this.y, targetX: player.x, targetY: player.y, damage: 15 }
+              }))
+            }
+          }
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.ASSEMBLER:
+        // Build mini-drone every 6 seconds
+        if (currentTime - this.lastSpecialAbility > 6000) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('assemblerBuild', {
+              detail: {
+                x: this.x + (Math.random() - 0.5) * 80,
+                y: this.y + (Math.random() - 0.5) * 80,
+              }
+            }))
+          }
+          // Build visual
+          const buildEffect = this.scene.add.circle(this.x, this.y, 30, 0x3388bb, 0.5)
+          this.scene.tweens.add({
+            targets: buildEffect,
+            scale: 1.5,
+            alpha: 0,
+            duration: 500,
+            onComplete: () => buildEffect.destroy()
+          })
+          this.lastSpecialAbility = currentTime
+        }
+        break
+
+      case EnemyType.MECH_TITAN:
+        // Mech Titan gets armor plating visual at low HP
+        const mtHpPercent = this.health / this.maxHealth
+        if (mtHpPercent < 0.3) {
+          this.setTint(0xff4444)
+        } else if (mtHpPercent < 0.6) {
+          this.setTint(0x88aacc)
         }
         break
     }

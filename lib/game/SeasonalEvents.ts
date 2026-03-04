@@ -68,15 +68,44 @@ const SEASONAL_EVENTS: Omit<SeasonalEvent, 'isActive'>[] = [
     ],
   },
 
-  // Spring Bloom Event (March-April)
+  // Void Incursion Event (March 2026)
+  {
+    id: 'void_incursion_2026',
+    name: 'Void Incursion',
+    description: 'The Void tears open! 2x void enemy spawns, 1.5x gold, 1.5x XP. Push deep into the abyss!',
+    icon: '🌑',
+    theme: 'void',
+    startDate: '2026-03-15',
+    endDate: '2026-04-15',
+    rewards: [
+      { id: 'void_badge', name: 'Void Walker', description: 'Exclusive Void Incursion badge', icon: '🌑', type: 'badge', requirement: 500 },
+      { id: 'void_title', name: 'Void Conqueror', description: 'Title: Void Conqueror', icon: '🏷️', type: 'title', requirement: 1500 },
+      { id: 'void_bonus', name: 'Void Mastery', description: '+15% damage to void enemies permanently', icon: '💥', type: 'bonus', requirement: 3000 },
+    ],
+    challenges: [
+      { id: 'vi_kills', name: 'Void Purge', description: 'Kill 500 void enemies', icon: '🌀', type: 'kills', target: 500, points: 300 },
+      { id: 'vi_floors', name: 'Abyss Diver', description: 'Reach floor 120', icon: '🕳️', type: 'floors', target: 120, points: 400 },
+      { id: 'vi_boss', name: 'Void Lord Slayer', description: 'Defeat the Void Lord', icon: '👹', type: 'boss', target: 1, points: 500 },
+      { id: 'vi_combo', name: 'Void Streak', description: 'Reach 150x combo', icon: '🔥', type: 'combo', target: 150, points: 350 },
+      { id: 'vi_gold', name: 'Void Riches', description: 'Collect 100,000 gold', icon: '💰', type: 'gold', target: 100000, points: 250 },
+      { id: 'vi_time', name: 'Speed Void', description: 'Clear 30 floors in 20 min', icon: '⏱️', type: 'time', target: 30, points: 450 },
+    ],
+    modifiers: [
+      { type: 'gold', value: 1.5, description: '+50% gold drops' },
+      { type: 'xp', value: 1.5, description: '+50% XP from all sources' },
+      { type: 'special', value: 2, description: '2x void enemy spawns' },
+    ],
+  },
+
+  // Spring Bloom Event (April 2026)
   {
     id: 'spring_2026',
     name: 'Spring Bloom',
     description: 'Nature awakens! Flowers bloom with bonus XP and enemies drop spring crystals.',
     icon: '🌸',
     theme: 'spring',
-    startDate: '2026-03-20',
-    endDate: '2026-04-20',
+    startDate: '2026-04-20',
+    endDate: '2026-05-20',
     rewards: [
       { id: 'flower_badge', name: 'Spring Guardian', description: 'Exclusive Spring badge', icon: '🌺', type: 'badge', requirement: 1500 },
       { id: 'nature_title', name: 'Nature Spirit', description: 'Title: Nature Spirit', icon: '🏷️', type: 'title', requirement: 3000 },

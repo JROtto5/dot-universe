@@ -26,6 +26,15 @@ export enum PowerUpType {
   SHADOW_CLONE = 'shadow_clone',     // Creates AI-controlled clone
   BERSERKER_RAGE = 'berserker_rage', // Unlimited ammo + speed + damage
   TIME_STOP = 'time_stop',           // Completely freezes time
+  // ULTRA LEGENDARY POWER-UPS
+  GRAVITY_WELL = 'gravity_well',
+  PLASMA_STORM = 'plasma_storm',
+  MIRROR_SHIELD = 'mirror_shield',
+  QUANTUM_SPLIT = 'quantum_split',
+  VOID_RIFT = 'void_rift',
+  OVERDRIVE = 'overdrive',
+  DEATH_AURA = 'death_aura',
+  TEMPORAL_LOOP = 'temporal_loop',
 }
 
 interface PowerUpConfig {
@@ -60,6 +69,15 @@ const POWERUP_CONFIGS: Record<PowerUpType, PowerUpConfig> = {
   [PowerUpType.SHADOW_CLONE]: { color: 0x8b008b, icon: '👥', duration: 20000 },
   [PowerUpType.BERSERKER_RAGE]: { color: 0xff0000, icon: '😈', duration: 12000 },
   [PowerUpType.TIME_STOP]: { color: 0xffffff, icon: '⏱️', duration: 5000 },
+  // ULTRA LEGENDARY POWER-UPS
+  [PowerUpType.GRAVITY_WELL]: { color: 0x4b0082, icon: '🌐', duration: 8000 },
+  [PowerUpType.PLASMA_STORM]: { color: 0x00ffff, icon: '⛈️', duration: 10000 },
+  [PowerUpType.MIRROR_SHIELD]: { color: 0xc0c0c0, icon: '🪞', duration: 12000 },
+  [PowerUpType.QUANTUM_SPLIT]: { color: 0xff00ff, icon: '👥', duration: 15000 },
+  [PowerUpType.VOID_RIFT]: { color: 0x2d0050, icon: '🕳️', duration: 6000 },
+  [PowerUpType.OVERDRIVE]: { color: 0xff4500, icon: '🔥', duration: 10000 },
+  [PowerUpType.DEATH_AURA]: { color: 0x800000, icon: '💀', duration: 8000 },
+  [PowerUpType.TEMPORAL_LOOP]: { color: 0xf9ca24, icon: '⏰', duration: 10000 },
 }
 
 export class PowerUp extends Phaser.Physics.Arcade.Sprite {
@@ -220,6 +238,38 @@ export class PowerUp extends Phaser.Physics.Arcade.Sprite {
         player.activateTimeStop(config.duration!)
         this.emitMessage('⏱️ TIME STOP! The world stands still!', 'legendary')
         break
+      case PowerUpType.GRAVITY_WELL:
+        player.activateBlackHole(config.duration!)
+        this.emitMessage('🌐 GRAVITY WELL! All enemies pulled to the center!', 'legendary')
+        break
+      case PowerUpType.PLASMA_STORM:
+        player.activateChainLightning(config.duration!)
+        this.emitMessage('⛈️ PLASMA STORM! Lightning rains from the sky!', 'legendary')
+        break
+      case PowerUpType.MIRROR_SHIELD:
+        player.activateInvincibility(config.duration!)
+        this.emitMessage('🪞 MIRROR SHIELD! All damage reflected back!', 'legendary')
+        break
+      case PowerUpType.QUANTUM_SPLIT:
+        player.activateShadowClone(config.duration!)
+        this.emitMessage('👥 QUANTUM SPLIT! 3 clones fight alongside you!', 'legendary')
+        break
+      case PowerUpType.VOID_RIFT:
+        player.activateBlackHole(config.duration!)
+        this.emitMessage('🕳️ VOID RIFT! Enemies sucked into oblivion!', 'legendary')
+        break
+      case PowerUpType.OVERDRIVE:
+        player.activateBerserkerRage(config.duration!)
+        this.emitMessage('🔥 OVERDRIVE! All stats DOUBLED!', 'legendary')
+        break
+      case PowerUpType.DEATH_AURA:
+        player.activateMeteorStorm(config.duration!)
+        this.emitMessage('💀 DEATH AURA! All nearby enemies take damage!', 'legendary')
+        break
+      case PowerUpType.TEMPORAL_LOOP:
+        player.activateTimeStop(config.duration!)
+        this.emitMessage('⏰ TEMPORAL LOOP! Time rewinds for you!', 'legendary')
+        break
     }
 
     // Collect effect
@@ -321,6 +371,15 @@ export class PowerUpManager {
       { type: PowerUpType.SHADOW_CLONE, weight: 0.5 },
       { type: PowerUpType.BERSERKER_RAGE, weight: 0.5 },
       { type: PowerUpType.TIME_STOP, weight: 0.5 },
+      // ULTRA LEGENDARY POWER-UPS (0.3 weight each)
+      { type: PowerUpType.GRAVITY_WELL, weight: 0.3 },
+      { type: PowerUpType.PLASMA_STORM, weight: 0.3 },
+      { type: PowerUpType.MIRROR_SHIELD, weight: 0.3 },
+      { type: PowerUpType.QUANTUM_SPLIT, weight: 0.3 },
+      { type: PowerUpType.VOID_RIFT, weight: 0.3 },
+      { type: PowerUpType.OVERDRIVE, weight: 0.3 },
+      { type: PowerUpType.DEATH_AURA, weight: 0.3 },
+      { type: PowerUpType.TEMPORAL_LOOP, weight: 0.3 },
     ]
 
     const totalWeight = weightedTypes.reduce((sum, w) => sum + w.weight, 0)

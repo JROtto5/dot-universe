@@ -2,7 +2,7 @@ import * as Phaser from 'phaser'
 import Player from './Player'
 import Enemy from './Enemy'
 
-export type BossType = 'tank' | 'speed' | 'sniper' | 'healer' | 'mega' | 'hydra' | 'dragon' | 'reaper' | 'titan' | 'phoenix'
+export type BossType = 'tank' | 'speed' | 'sniper' | 'healer' | 'mega' | 'hydra' | 'dragon' | 'reaper' | 'titan' | 'phoenix' | 'void_lord' | 'mecha_overlord' | 'time_weaver' | 'plague_mother' | 'architect'
 
 export interface BossConfig {
   type: BossType
@@ -151,6 +151,74 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
     specialAbility: 'Resurrection',
     moneyDrop: 15000,
     xpDrop: 8000
+  },
+  // ═══════════════════════════════════════════════════════════════
+  // EXPANSION BOSSES - Epic endgame encounters!
+  // ═══════════════════════════════════════════════════════════════
+  void_lord: {
+    type: 'void_lord',
+    name: 'THE VOID LORD',
+    health: 30000,
+    speed: 120,
+    size: 100,
+    damage: 90,
+    color: 0x2d0050,
+    icon: '🌑',
+    specialAbility: 'Void Rifts',
+    moneyDrop: 18000,
+    xpDrop: 9000
+  },
+  mecha_overlord: {
+    type: 'mecha_overlord',
+    name: 'MECHA OVERLORD',
+    health: 25000,
+    speed: 100,
+    size: 90,
+    damage: 70,
+    color: 0x44aaff,
+    icon: '🤖',
+    specialAbility: 'Drone Swarm',
+    moneyDrop: 16000,
+    xpDrop: 8000
+  },
+  time_weaver: {
+    type: 'time_weaver',
+    name: 'TIME WEAVER',
+    health: 22000,
+    speed: 160,
+    size: 85,
+    damage: 60,
+    color: 0xf9ca24,
+    icon: '⏳',
+    specialAbility: 'Time Manipulation',
+    moneyDrop: 20000,
+    xpDrop: 10000
+  },
+  plague_mother: {
+    type: 'plague_mother',
+    name: 'PLAGUE MOTHER',
+    health: 35000,
+    speed: 60,
+    size: 95,
+    damage: 50,
+    color: 0x27ae60,
+    icon: '🦠',
+    specialAbility: 'Plague Zones',
+    moneyDrop: 22000,
+    xpDrop: 11000
+  },
+  architect: {
+    type: 'architect',
+    name: 'THE ARCHITECT',
+    health: 60000,
+    speed: 40,
+    size: 120,
+    damage: 120,
+    color: 0xbdc3c7,
+    icon: '🏛️',
+    specialAbility: 'Build Defenses',
+    moneyDrop: 50000,
+    xpDrop: 25000
   }
 }
 
@@ -327,6 +395,81 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
       graphics.fillTriangle(size / 2 + size / 6, 0, size / 2, size / 6, size * 3 / 4, size / 4)
     }
 
+    if (this.bossConfig.type === 'void_lord') {
+      // Void rift markings
+      graphics.lineStyle(4, 0x6600cc, 0.8)
+      graphics.strokeCircle(size / 2, size / 2, size / 3)
+      // Void eye
+      graphics.fillStyle(0x6600cc, 1)
+      graphics.fillCircle(size / 2, size / 2, size / 5)
+      graphics.fillStyle(0x000000, 1)
+      graphics.fillCircle(size / 2, size / 2, size / 8)
+    }
+
+    if (this.bossConfig.type === 'mecha_overlord') {
+      // Mechanical lines
+      graphics.lineStyle(3, 0x88ccff, 0.8)
+      for (let i = 0; i < 4; i++) {
+        const mAngle = (i / 4) * Math.PI * 2
+        graphics.lineBetween(size / 2, size / 2, size / 2 + Math.cos(mAngle) * size / 2.5, size / 2 + Math.sin(mAngle) * size / 2.5)
+      }
+      // Antenna
+      graphics.fillStyle(0x44aaff, 1)
+      graphics.fillCircle(size / 2, size / 6, 6)
+    }
+
+    if (this.bossConfig.type === 'time_weaver') {
+      // Clock face markings
+      graphics.lineStyle(2, 0xf9ca24, 0.6)
+      for (let i = 0; i < 12; i++) {
+        const tAngle = (i / 12) * Math.PI * 2
+        graphics.lineBetween(
+          size / 2 + Math.cos(tAngle) * size / 3,
+          size / 2 + Math.sin(tAngle) * size / 3,
+          size / 2 + Math.cos(tAngle) * size / 2.5,
+          size / 2 + Math.sin(tAngle) * size / 2.5
+        )
+      }
+      // Clock hands
+      graphics.lineStyle(3, 0xffffff, 1)
+      graphics.lineBetween(size / 2, size / 2, size / 2, size / 4)
+      graphics.lineBetween(size / 2, size / 2, size * 0.7, size / 2)
+    }
+
+    if (this.bossConfig.type === 'plague_mother') {
+      // Toxic bubbles
+      graphics.fillStyle(0x2ecc71, 0.5)
+      for (let i = 0; i < 8; i++) {
+        const bAngle = (i / 8) * Math.PI * 2
+        graphics.fillCircle(
+          size / 2 + Math.cos(bAngle) * size / 3,
+          size / 2 + Math.sin(bAngle) * size / 3,
+          size / 8
+        )
+      }
+    }
+
+    if (this.bossConfig.type === 'architect') {
+      // Blueprint grid
+      graphics.lineStyle(2, 0x3498db, 0.4)
+      for (let g = 0; g < 5; g++) {
+        graphics.lineBetween(size / 6 + g * size / 5, size / 6, size / 6 + g * size / 5, size * 5 / 6)
+        graphics.lineBetween(size / 6, size / 6 + g * size / 5, size * 5 / 6, size / 6 + g * size / 5)
+      }
+      // Gear symbol
+      graphics.lineStyle(4, 0xecf0f1, 1)
+      graphics.strokeCircle(size / 2, size / 2, size / 4)
+      for (let i = 0; i < 8; i++) {
+        const gAngle = (i / 8) * Math.PI * 2
+        graphics.fillStyle(0xecf0f1, 1)
+        graphics.fillRect(
+          size / 2 + Math.cos(gAngle) * size / 4 - 4,
+          size / 2 + Math.sin(gAngle) * size / 4 - 4,
+          8, 8
+        )
+      }
+    }
+
     graphics.generateTexture(`boss_${this.bossConfig.type}`, size, size)
     graphics.destroy()
 
@@ -482,6 +625,31 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
       case 'phoenix':
         // Fire nova - expanding ring of flames!
         this.phoenixFireNova()
+        break
+
+      case 'void_lord':
+        // Open void rifts that spawn enemies
+        this.voidLordRifts()
+        break
+
+      case 'mecha_overlord':
+        // Deploy drone swarm + missile barrage
+        this.mechaOverlordSwarm()
+        break
+
+      case 'time_weaver':
+        // Reverse player movement / slow time
+        this.timeWeaverManipulate(player)
+        break
+
+      case 'plague_mother':
+        // Spread poison zones and spawn infected minions
+        this.plaguMotherSpread()
+        break
+
+      case 'architect':
+        // Build walls and turrets
+        this.architectBuild(player)
         break
     }
   }
@@ -713,6 +881,185 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // EXPANSION BOSS ABILITY IMPLEMENTATIONS
+  // ═══════════════════════════════════════════════════════════════
+
+  private voidLordRifts() {
+    // Open 3 void rifts around the arena
+    for (let i = 0; i < 3; i++) {
+      const riftX = this.x + (Math.random() - 0.5) * 400
+      const riftY = this.y + (Math.random() - 0.5) * 400
+      const rift = this.scene.add.circle(riftX, riftY, 10, 0x2d0050, 0.8)
+      rift.setStrokeStyle(4, 0x6600cc)
+
+      this.scene.tweens.add({
+        targets: rift,
+        scale: 5,
+        duration: 1000,
+        yoyo: true,
+        onComplete: () => rift.destroy()
+      })
+    }
+
+    // Emit event to spawn void enemies
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('voidRiftSpawn', {
+        detail: { x: this.x, y: this.y, count: 2 }
+      }))
+    }
+
+    this.scene.cameras.main.shake(200, 0.008)
+  }
+
+  private mechaOverlordSwarm() {
+    // Deploy drone swarm
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2
+      const drone = this.scene.add.circle(this.x, this.y, 8, 0x88ccff)
+      this.scene.tweens.add({
+        targets: drone,
+        x: this.x + Math.cos(angle) * 300,
+        y: this.y + Math.sin(angle) * 300,
+        scale: 0,
+        duration: 1000,
+        onComplete: () => drone.destroy()
+      })
+    }
+
+    // Missile barrage
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mechaBarrage', {
+        detail: { x: this.x, y: this.y, missiles: 6, damage: 25 }
+      }))
+    }
+
+    this.scene.cameras.main.flash(100, 100, 200, 255, false)
+  }
+
+  private timeWeaverManipulate(player: Player) {
+    // Time distortion visual
+    const distortion = this.scene.add.circle(this.x, this.y, 30, 0xf9ca24, 0)
+    distortion.setStrokeStyle(6, 0xf9ca24, 0.6)
+
+    this.scene.tweens.add({
+      targets: distortion,
+      scale: 12,
+      alpha: 0,
+      duration: 1500,
+      onComplete: () => distortion.destroy()
+    })
+
+    // Slow effect on player
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('timeManipulation', {
+        detail: { duration: 3000, slowFactor: 0.4 }
+      }))
+    }
+
+    // Clock particles
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2
+      const clockPart = this.scene.add.text(
+        this.x + Math.cos(angle) * 50,
+        this.y + Math.sin(angle) * 50,
+        '⏰', { fontSize: '16px' }
+      ).setOrigin(0.5)
+      this.scene.tweens.add({
+        targets: clockPart,
+        x: this.x + Math.cos(angle) * 200,
+        y: this.y + Math.sin(angle) * 200,
+        alpha: 0,
+        rotation: Math.PI * 4,
+        duration: 1200,
+        onComplete: () => clockPart.destroy()
+      })
+    }
+  }
+
+  private plaguMotherSpread() {
+    // Create poison zones
+    for (let i = 0; i < 4; i++) {
+      const zoneX = this.x + (Math.random() - 0.5) * 500
+      const zoneY = this.y + (Math.random() - 0.5) * 500
+      const zone = this.scene.add.circle(zoneX, zoneY, 40, 0x27ae60, 0.3)
+
+      this.scene.tweens.add({
+        targets: zone,
+        scale: 3,
+        alpha: 0,
+        duration: 4000,
+        onComplete: () => zone.destroy()
+      })
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('poisonZone', {
+          detail: { x: zoneX, y: zoneY, radius: 120, damage: 8, duration: 4000 }
+        }))
+      }
+    }
+
+    // Spawn infected minions
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bossSummonMinions', {
+        detail: { x: this.x, y: this.y, count: 2 + Math.floor(Math.random() * 2) }
+      }))
+    }
+  }
+
+  private architectBuild(player: Player) {
+    // Build defensive turrets
+    for (let i = 0; i < 3; i++) {
+      const turretAngle = (i / 3) * Math.PI * 2
+      const turretX = this.x + Math.cos(turretAngle) * 150
+      const turretY = this.y + Math.sin(turretAngle) * 150
+
+      const turret = this.scene.add.rectangle(turretX, turretY, 30, 30, 0xbdc3c7)
+      turret.setStrokeStyle(3, 0x7f8c8d)
+
+      // Turret shoots at player
+      this.scene.time.delayedCall(500, () => {
+        if (this.active) {
+          const shootAngle = Phaser.Math.Angle.Between(turretX, turretY, player.x, player.y)
+          const bullet = this.scene.add.circle(turretX, turretY, 6, 0xff4444)
+          this.scene.tweens.add({
+            targets: bullet,
+            x: turretX + Math.cos(shootAngle) * 400,
+            y: turretY + Math.sin(shootAngle) * 400,
+            duration: 600,
+            onComplete: () => bullet.destroy()
+          })
+        }
+      })
+
+      // Turret fades after 5 seconds
+      this.scene.tweens.add({
+        targets: turret,
+        alpha: 0,
+        duration: 500,
+        delay: 4500,
+        onComplete: () => turret.destroy()
+      })
+    }
+
+    // Build wall segments
+    const wallAngle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y)
+    const wallX = this.x + Math.cos(wallAngle) * 100
+    const wallY = this.y + Math.sin(wallAngle) * 100
+    const wall = this.scene.add.rectangle(wallX, wallY, 120, 20, 0x95a5a6)
+    wall.setRotation(wallAngle + Math.PI / 2)
+
+    this.scene.tweens.add({
+      targets: wall,
+      alpha: 0,
+      duration: 500,
+      delay: 3500,
+      onComplete: () => wall.destroy()
+    })
+
+    this.scene.cameras.main.shake(150, 0.005)
+  }
+
   takeDamage(amount: number): boolean {
     // Tank boss has damage reduction
     if (this.bossConfig.type === 'tank') {
@@ -771,7 +1118,7 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   private die() {
-    const isLegendary = ['hydra', 'dragon', 'reaper', 'titan', 'phoenix'].includes(this.bossConfig.type)
+    const isLegendary = ['hydra', 'dragon', 'reaper', 'titan', 'phoenix', 'void_lord', 'mecha_overlord', 'time_weaver', 'plague_mother', 'architect'].includes(this.bossConfig.type)
 
     // Standard death explosion
     const particleCount = isLegendary ? 60 : 30
