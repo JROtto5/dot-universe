@@ -4,6 +4,13 @@ import { LeaderboardService } from '../supabase/LeaderboardService'
 import { SaveData, LeaderboardEntry } from '../supabase/client'
 import { endlessMode } from './EndlessMode'
 import { challengeModes, CHALLENGE_MODES, ChallengeMode } from './ChallengeModes'
+// CONVERGENCE UPDATE
+import { prestigeSystem, TALENT_DEFINITIONS } from './PrestigeSystem'
+import { companionSystem, COMPANION_DEFINITIONS, CompanionType } from './CompanionSystem'
+import { settingsManager, GameSettings, DEFAULT_SETTINGS } from './SettingsManager'
+import { getWeeklyModifier } from './SeasonalEvents'
+// EVOLUTION UPDATE
+import { cosmeticSystem, PLAYER_SKINS, WEAPON_SKINS, KILL_EFFECTS, TITLES, TRAIL_EFFECTS, CosmeticCategory } from './CosmeticSystem'
 
 // Color palette for sci-fi cyber theme
 const COLORS = {
@@ -128,6 +135,12 @@ export default class MenuScene extends Phaser.Scene {
   private classSelectionContainer: Phaser.GameObjects.Container | null = null
   private selectedClass: PlayerClass = PLAYER_CLASSES[0]
 
+  // CONVERGENCE UPDATE: Prestige, Settings, Companion overlays
+  private prestigeOverlay: Phaser.GameObjects.Container | null = null
+  private settingsOverlay: Phaser.GameObjects.Container | null = null
+  private companionOverlay: Phaser.GameObjects.Container | null = null
+  private cosmeticsOverlay: Phaser.GameObjects.Container | null = null
+
   constructor() {
     super({ key: 'MenuScene' })
   }
@@ -161,6 +174,7 @@ export default class MenuScene extends Phaser.Scene {
     this.createBackground()
     this.createParticles()
     this.createTitle()
+    this.createConvergenceButtons()
     this.createGameModeButtons()
     this.loadAndDisplayLeaderboard()
     this.loadAndDisplaySaveSlots()
@@ -778,6 +792,23 @@ export default class MenuScene extends Phaser.Scene {
     startBtn.on('pointerdown', () => this.launchGameWithClass())
 
     this.classSelectionContainer.add([startBtn, startText])
+
+    // Tutorial skip toggle
+    const tutorialComplete = typeof window !== 'undefined' && localStorage.getItem('dotslayer_tutorial_complete') === 'true'
+    const tutorialLabel = tutorialComplete ? 'Tutorial: SKIPPED' : 'Tutorial: ON'
+    const tutorialToggle = this.add.text(centerX, buttonY + 50, tutorialLabel, {
+      fontSize: '14px',
+      color: tutorialComplete ? '#95a5a6' : '#2ecc71',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+
+    tutorialToggle.on('pointerdown', () => {
+      const isComplete = localStorage.getItem('dotslayer_tutorial_complete') === 'true'
+      localStorage.setItem('dotslayer_tutorial_complete', isComplete ? 'false' : 'true')
+      tutorialToggle.setText(isComplete ? 'Tutorial: ON' : 'Tutorial: SKIPPED')
+      tutorialToggle.setColor(isComplete ? '#2ecc71' : '#95a5a6')
+    })
+
+    this.classSelectionContainer.add(tutorialToggle)
   }
 
   private createClassCard(playerClass: PlayerClass, x: number, y: number, width: number, height: number) {
@@ -875,6 +906,587 @@ export default class MenuScene extends Phaser.Scene {
     this.time.delayedCall(300, () => {
       this.scene.start('GameSceneV3')
     })
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONVERGENCE UPDATE: Prestige, Settings, Companion buttons
+  // ═══════════════════════════════════════════════════════════════
+
+  private createConvergenceButtons() {
+    const { width, height } = this.scale
+    const isSmallScreen = width < 600
+
+    // Show prestige level badge if > 0
+    const pLevel = prestigeSystem.getPrestigeLevel()
+    const ngTier = prestigeSystem.getNGPlusTier()
+    if (pLevel > 0) {
+      this.add.text(width / 2, 170, `⭐ Prestige ${pLevel}${ngTier > 0 ? ` | NG+${ngTier}` : ''} | ${prestigeSystem.getAvailableAP()} AP`, {
+        fontSize: isSmallScreen ? '13px' : '16px',
+        color: '#ffd700',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5)
+    }
+
+    // Weekly modifier display
+    const weeklyMod = getWeeklyModifier()
+    this.add.text(width / 2, pLevel > 0 ? 195 : 170, `${weeklyMod.icon} Weekly: ${weeklyMod.name}`, {
+      fontSize: isSmallScreen ? '11px' : '13px',
+      color: '#88c0d0',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5)
+
+    // Row of utility buttons: Prestige | Companions | Settings
+    const btnSize = isSmallScreen ? 36 : 44
+    const btnSpacing = isSmallScreen ? 8 : 12
+    const btnY = height - (isSmallScreen ? 40 : 50)
+    const buttons = [
+      { label: '⭐', tooltip: 'PRESTIGE', onClick: () => this.showPrestigeOverlay(), show: pLevel > 0 || this.hasReachedFloor50() },
+      { label: '🐾', tooltip: 'COMPANIONS', onClick: () => this.showCompanionOverlay(), show: companionSystem.getUnlockedCompanions().length > 0 },
+      { label: '🎨', tooltip: 'COSMETICS', onClick: () => this.showCosmeticsOverlay(), show: true },
+      { label: '⚙️', tooltip: 'SETTINGS', onClick: () => this.showSettingsOverlay(), show: true },
+    ].filter(b => b.show)
+
+    const totalBtnWidth = buttons.length * btnSize + (buttons.length - 1) * btnSpacing
+    const btnStartX = width / 2 - totalBtnWidth / 2 + btnSize / 2
+
+    buttons.forEach((btn, i) => {
+      const x = btnStartX + i * (btnSize + btnSpacing)
+      const bg = this.add.rectangle(x, btnY, btnSize, btnSize, COLORS.panel, 0.9)
+      bg.setStrokeStyle(2, COLORS.accent, 0.5)
+      bg.setInteractive({ useHandCursor: true })
+      const icon = this.add.text(x, btnY - 4, btn.label, { fontSize: isSmallScreen ? '16px' : '20px' }).setOrigin(0.5)
+      const label = this.add.text(x, btnY + 16, btn.tooltip, { fontSize: '8px', color: `#${COLORS.text.toString(16).padStart(6, '0')}` }).setOrigin(0.5)
+      bg.on('pointerover', () => { bg.setStrokeStyle(3, COLORS.highlight, 1); this.tweens.add({ targets: [bg, icon, label], scale: 1.1, duration: 100 }) })
+      bg.on('pointerout', () => { bg.setStrokeStyle(2, COLORS.accent, 0.5); this.tweens.add({ targets: [bg, icon, label], scale: 1, duration: 100 }) })
+      bg.on('pointerdown', btn.onClick)
+    })
+  }
+
+  private hasReachedFloor50(): boolean {
+    try {
+      const progress = JSON.parse(localStorage.getItem('dotslayer_progress') || '{}')
+      return (progress.highestFloor || 0) >= 50
+    } catch { return false }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRESTIGE OVERLAY with Talent Tree
+  // ═══════════════════════════════════════════════════════════════
+
+  private showPrestigeOverlay() {
+    if (this.prestigeOverlay) return
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    this.prestigeOverlay = this.add.container(0, 0).setDepth(1000)
+    const overlay = this.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.9).setOrigin(0)
+    this.prestigeOverlay.add(overlay)
+
+    // Title
+    const title = this.add.text(cx, 30, `⭐ ASCENSION — Prestige ${prestigeSystem.getPrestigeLevel()}`, {
+      fontSize: '28px', fontStyle: 'bold', color: '#ffd700', stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5)
+    this.prestigeOverlay.add(title)
+
+    // AP display
+    const apText = this.add.text(cx, 65, `Available AP: ${prestigeSystem.getAvailableAP()} | NG+ Tier: ${prestigeSystem.getNGPlusTier()}`, {
+      fontSize: '16px', color: '#00d9ff', stroke: '#000000', strokeThickness: 2
+    }).setOrigin(0.5)
+    this.prestigeOverlay.add(apText)
+
+    // Stats
+    const stats = prestigeSystem.getPrestigeStats()
+    const statsText = this.add.text(cx, 90, `Total Prestiges: ${stats.totalPrestiges} | Highest Floor: ${stats.highestFloorEver} | Total AP Earned: ${stats.totalAPEarned}`, {
+      fontSize: '12px', color: '#88c0d0'
+    }).setOrigin(0.5)
+    this.prestigeOverlay.add(statsText)
+
+    // Talent tree — 3 columns
+    const branches = ['combat', 'survival', 'fortune'] as const
+    const branchNames = { combat: '⚔️ COMBAT', survival: '🛡️ SURVIVAL', fortune: '💰 FORTUNE' }
+    const branchColors = { combat: '#ff4444', survival: '#44ff44', fortune: '#ffcc00' }
+    const colWidth = Math.min(220, (width - 60) / 3)
+    const startX = cx - colWidth
+    const startY = 120
+
+    branches.forEach((branch, col) => {
+      const bx = startX + col * colWidth
+      const branchLabel = this.add.text(bx, startY, branchNames[branch], {
+        fontSize: '16px', fontStyle: 'bold', color: branchColors[branch], stroke: '#000000', strokeThickness: 2
+      }).setOrigin(0.5)
+      this.prestigeOverlay!.add(branchLabel)
+
+      const talents = TALENT_DEFINITIONS.filter(t => t.branch === branch)
+      talents.forEach((talent, i) => {
+        const ty = startY + 35 + i * 60
+        const rank = prestigeSystem.getTalentRank(talent.id)
+        const maxed = rank >= talent.maxRank
+        const canUnlock = prestigeSystem.canUnlockTalent(talent.id)
+        const cost = rank < talent.costs.length ? talent.costs[rank] : 0
+
+        const nodeColor = maxed ? 0xffd700 : canUnlock.canUnlock ? 0x00d9ff : 0x333333
+        const node = this.add.rectangle(bx, ty, colWidth - 20, 50, nodeColor, maxed ? 0.4 : 0.2)
+        node.setStrokeStyle(2, nodeColor, maxed ? 1 : 0.6)
+        if (canUnlock.canUnlock && !maxed) node.setInteractive({ useHandCursor: true })
+        this.prestigeOverlay!.add(node)
+
+        const nameStr = `${talent.name} ${maxed ? '(MAX)' : `[${rank}/${talent.maxRank}]`}`
+        const nameText = this.add.text(bx, ty - 10, nameStr, {
+          fontSize: '12px', fontStyle: 'bold', color: maxed ? '#ffd700' : '#ffffff'
+        }).setOrigin(0.5)
+        this.prestigeOverlay!.add(nameText)
+
+        const descStr = maxed ? talent.description : `${talent.description} — Cost: ${cost} AP`
+        const descText = this.add.text(bx, ty + 8, descStr, {
+          fontSize: '10px', color: '#88c0d0', wordWrap: { width: colWidth - 30 }, align: 'center'
+        }).setOrigin(0.5)
+        this.prestigeOverlay!.add(descText)
+
+        if (canUnlock.canUnlock && !maxed) {
+          node.on('pointerdown', () => {
+            if (prestigeSystem.unlockTalent(talent.id)) {
+              this.closePrestigeOverlay()
+              this.showPrestigeOverlay() // Refresh
+            }
+          })
+          node.on('pointerover', () => node.setStrokeStyle(3, COLORS.highlight, 1))
+          node.on('pointerout', () => node.setStrokeStyle(2, nodeColor, 0.6))
+        }
+      })
+    })
+
+    // NG+ tier selector
+    const ngY = height - 100
+    const ngLabel = this.add.text(cx, ngY, 'NG+ Tier (applies on next run):', {
+      fontSize: '14px', color: '#ffffff'
+    }).setOrigin(0.5)
+    this.prestigeOverlay.add(ngLabel)
+
+    for (let t = 0; t <= 5; t++) {
+      const tx = cx - 125 + t * 50
+      const active = prestigeSystem.getNGPlusTier() === t
+      const btn = this.add.rectangle(tx, ngY + 30, 40, 30, active ? COLORS.accent : COLORS.panel, 0.9)
+      btn.setStrokeStyle(2, active ? COLORS.highlight : COLORS.accent, active ? 1 : 0.5)
+      btn.setInteractive({ useHandCursor: true })
+      const label = this.add.text(tx, ngY + 30, t === 0 ? 'OFF' : `+${t}`, {
+        fontSize: '12px', fontStyle: 'bold', color: active ? '#ffffff' : '#88c0d0'
+      }).setOrigin(0.5)
+      this.prestigeOverlay.add([btn, label])
+
+      btn.on('pointerdown', () => {
+        prestigeSystem.setNGPlusTier(t)
+        this.closePrestigeOverlay()
+        this.showPrestigeOverlay()
+      })
+    }
+
+    // Reset talents button
+    const resetBtn = this.add.text(cx - 200, ngY + 30, 'Reset Talents', {
+      fontSize: '12px', color: '#ff6666', fontStyle: 'bold'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+    resetBtn.on('pointerdown', () => {
+      prestigeSystem.resetTalents()
+      this.closePrestigeOverlay()
+      this.showPrestigeOverlay()
+    })
+    this.prestigeOverlay.add(resetBtn)
+
+    // Close button
+    this.addCloseButton(this.prestigeOverlay, () => this.closePrestigeOverlay())
+  }
+
+  private closePrestigeOverlay() {
+    if (this.prestigeOverlay) { this.prestigeOverlay.destroy(); this.prestigeOverlay = null }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMPANION SELECTION OVERLAY
+  // ═══════════════════════════════════════════════════════════════
+
+  private showCompanionOverlay() {
+    if (this.companionOverlay) return
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    this.companionOverlay = this.add.container(0, 0).setDepth(1000)
+    const overlay = this.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.9).setOrigin(0)
+    this.companionOverlay.add(overlay)
+
+    const title = this.add.text(cx, 30, '🐾 COMPANIONS', {
+      fontSize: '28px', fontStyle: 'bold', color: '#44ff44', stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5)
+    this.companionOverlay.add(title)
+
+    const active = companionSystem.getActiveCompanion()
+    const subtitle = this.add.text(cx, 65, active ? `Active: ${COMPANION_DEFINITIONS[active].name}` : 'None equipped', {
+      fontSize: '16px', color: '#88c0d0'
+    }).setOrigin(0.5)
+    this.companionOverlay.add(subtitle)
+
+    // Companion cards — 3 per row
+    const allTypes: CompanionType[] = ['attack_drone', 'shield_bot', 'heal_sprite', 'speed_ghost', 'loot_magnet', 'boss_hunter']
+    const cardW = Math.min(180, (width - 80) / 3)
+    const cardH = 140
+    const spacing = 15
+
+    allTypes.forEach((type, i) => {
+      const def = COMPANION_DEFINITIONS[type]
+      const unlocked = companionSystem.isUnlocked(type)
+      const isActive = active === type
+      const level = companionSystem.getLevel(type)
+      const row = Math.floor(i / 3)
+      const col = i % 3
+      const x = cx - cardW - spacing / 2 + col * (cardW + spacing)
+      const y = 120 + row * (cardH + spacing)
+
+      const bg = this.add.rectangle(x, y, cardW, cardH, isActive ? def.color : COLORS.panel, isActive ? 0.3 : 0.2)
+      bg.setStrokeStyle(2, unlocked ? (isActive ? COLORS.highlight : def.color) : 0x333333, unlocked ? 0.8 : 0.3)
+      if (unlocked) bg.setInteractive({ useHandCursor: true })
+      this.companionOverlay!.add(bg)
+
+      const icon = this.add.text(x, y - 40, unlocked ? def.icon : '🔒', { fontSize: '24px' }).setOrigin(0.5)
+      const name = this.add.text(x, y - 15, unlocked ? def.name : 'Locked', {
+        fontSize: '13px', fontStyle: 'bold', color: unlocked ? '#ffffff' : '#555555'
+      }).setOrigin(0.5)
+      this.companionOverlay!.add([icon, name])
+
+      if (unlocked) {
+        const levelText = this.add.text(x, y + 5, `Level ${level}/30`, {
+          fontSize: '11px', color: '#88c0d0'
+        }).setOrigin(0.5)
+        const passiveText = this.add.text(x, y + 22, def.passiveBonus, {
+          fontSize: '9px', color: '#aaaaaa', wordWrap: { width: cardW - 15 }, align: 'center'
+        }).setOrigin(0.5)
+
+        // XP bar
+        const barW = cardW - 30
+        const barH = 6
+        const barY = y + 42
+        const barBg = this.add.rectangle(x, barY, barW, barH, 0x333333).setOrigin(0.5)
+        const progress = companionSystem.getXPProgress(type)
+        const barFill = this.add.rectangle(x - barW / 2 + (barW * progress) / 2, barY, barW * progress, barH, def.color).setOrigin(0.5)
+
+        // Abilities list
+        const abilities = def.abilities.map((a, idx) => {
+          const unlockLevel = a.unlockLevel
+          const abilityUnlocked = level >= unlockLevel
+          return `${abilityUnlocked ? '✓' : '○'} Lv${unlockLevel}: ${a.name}`
+        }).join('  ')
+        const abText = this.add.text(x, y + 55, abilities, {
+          fontSize: '8px', color: '#666666', wordWrap: { width: cardW - 10 }, align: 'center'
+        }).setOrigin(0.5)
+
+        this.companionOverlay!.add([levelText, passiveText, barBg, barFill, abText])
+
+        bg.on('pointerdown', () => {
+          if (isActive) {
+            companionSystem.unequipCompanion()
+          } else {
+            companionSystem.equipCompanion(type)
+          }
+          this.closeCompanionOverlay()
+          this.showCompanionOverlay()
+        })
+        bg.on('pointerover', () => bg.setStrokeStyle(3, COLORS.highlight, 1))
+        bg.on('pointerout', () => bg.setStrokeStyle(2, isActive ? COLORS.highlight : def.color, 0.8))
+      } else {
+        const lockText = this.add.text(x, y + 15, `Unlocks from Floor ${def.unlockBossFloor} boss`, {
+          fontSize: '9px', color: '#555555', wordWrap: { width: cardW - 15 }, align: 'center'
+        }).setOrigin(0.5)
+        this.companionOverlay!.add(lockText)
+      }
+    })
+
+    this.addCloseButton(this.companionOverlay, () => this.closeCompanionOverlay())
+  }
+
+  private closeCompanionOverlay() {
+    if (this.companionOverlay) { this.companionOverlay.destroy(); this.companionOverlay = null }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SETTINGS OVERLAY
+  // ═══════════════════════════════════════════════════════════════
+
+  private showSettingsOverlay() {
+    if (this.settingsOverlay) return
+    const { width, height } = this.scale
+    const cx = width / 2
+
+    this.settingsOverlay = this.add.container(0, 0).setDepth(1000)
+    const overlay = this.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.9).setOrigin(0)
+    this.settingsOverlay.add(overlay)
+
+    const title = this.add.text(cx, 30, '⚙️ SETTINGS', {
+      fontSize: '28px', fontStyle: 'bold', color: '#00d9ff', stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5)
+    this.settingsOverlay.add(title)
+
+    const settings = settingsManager.getAll()
+    let curY = 80
+
+    // Audio section
+    curY = this.addSettingsSection('AUDIO', curY, cx)
+    curY = this.addVolumeSlider('Master Volume', 'masterVolume', settings.masterVolume, curY, cx)
+    curY = this.addVolumeSlider('Music Volume', 'musicVolume', settings.musicVolume, curY, cx)
+    curY = this.addVolumeSlider('SFX Volume', 'sfxVolume', settings.sfxVolume, curY, cx)
+    curY = this.addSettingsToggle('Music Muted', 'musicMuted', settings.musicMuted, curY, cx)
+    curY = this.addSettingsToggle('SFX Muted', 'sfxMuted', settings.sfxMuted, curY, cx)
+
+    // Graphics section
+    curY = this.addSettingsSection('GRAPHICS', curY + 10, cx)
+    curY = this.addSettingsToggle('Screen Shake', 'screenShake', settings.screenShake, curY, cx)
+    curY = this.addSettingsToggle('Damage Numbers', 'showDamageNumbers', settings.showDamageNumbers, curY, cx)
+    curY = this.addSettingsToggle('Minimap', 'showMinimap', settings.showMinimap, curY, cx)
+
+    // Accessibility
+    curY = this.addSettingsSection('ACCESSIBILITY', curY + 10, cx)
+    curY = this.addSettingsToggle('Large Text', 'largeText', settings.largeText, curY, cx)
+    curY = this.addSettingsToggle('Reduced Motion', 'reducedMotion', settings.reducedMotion, curY, cx)
+
+    // Gameplay
+    curY = this.addSettingsSection('GAMEPLAY', curY + 10, cx)
+    curY = this.addSettingsToggle('Auto Reload', 'autoReload', settings.autoReload, curY, cx)
+    curY = this.addSettingsToggle('Tutorial Hints', 'showTutorialHints', settings.showTutorialHints, curY, cx)
+
+    // Reset button
+    const resetBtn = this.add.text(cx, curY + 15, 'Reset to Defaults', {
+      fontSize: '14px', color: '#ff6666', fontStyle: 'bold'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+    resetBtn.on('pointerdown', () => {
+      settingsManager.reset()
+      this.closeSettingsOverlay()
+      this.showSettingsOverlay()
+    })
+    this.settingsOverlay.add(resetBtn)
+
+    this.addCloseButton(this.settingsOverlay, () => this.closeSettingsOverlay())
+  }
+
+  private addSettingsSection(label: string, y: number, cx: number): number {
+    const text = this.add.text(cx, y, label, {
+      fontSize: '16px', fontStyle: 'bold', color: '#00d9ff', stroke: '#000000', strokeThickness: 2
+    }).setOrigin(0.5)
+    this.settingsOverlay!.add(text)
+    return y + 25
+  }
+
+  private addSettingsToggle(label: string, key: keyof GameSettings, value: boolean, y: number, cx: number): number {
+    const labelText = this.add.text(cx - 120, y, label, {
+      fontSize: '13px', color: '#e0f4ff'
+    }).setOrigin(0, 0.5)
+
+    const toggleBg = this.add.rectangle(cx + 100, y, 50, 22, value ? 0x2ecc71 : 0x555555, 0.9)
+    toggleBg.setStrokeStyle(1, 0x888888, 0.5)
+    toggleBg.setInteractive({ useHandCursor: true })
+
+    const toggleText = this.add.text(cx + 100, y, value ? 'ON' : 'OFF', {
+      fontSize: '11px', fontStyle: 'bold', color: '#ffffff'
+    }).setOrigin(0.5)
+
+    toggleBg.on('pointerdown', () => {
+      const newVal = !settingsManager.get(key)
+      settingsManager.set(key, newVal as any)
+      toggleBg.setFillStyle(newVal ? 0x2ecc71 : 0x555555, 0.9)
+      toggleText.setText(newVal ? 'ON' : 'OFF')
+    })
+
+    this.settingsOverlay!.add([labelText, toggleBg, toggleText])
+    return y + 28
+  }
+
+  private addVolumeSlider(label: string, key: keyof GameSettings, value: number, y: number, cx: number): number {
+    const labelText = this.add.text(cx - 120, y, label, {
+      fontSize: '13px', color: '#e0f4ff'
+    }).setOrigin(0, 0.5)
+
+    const barW = 120
+    const barX = cx + 40
+    const barBg = this.add.rectangle(barX, y, barW, 12, 0x333333).setOrigin(0, 0.5)
+    const barFill = this.add.rectangle(barX, y, barW * (value as number), 12, 0x00d9ff).setOrigin(0, 0.5)
+
+    const valText = this.add.text(barX + barW + 10, y, `${Math.round((value as number) * 100)}%`, {
+      fontSize: '11px', color: '#88c0d0'
+    }).setOrigin(0, 0.5)
+
+    barBg.setInteractive({ useHandCursor: true })
+    barBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      const newVal = Math.max(0, Math.min(1, (pointer.x - barBg.x) / barW))
+      settingsManager.set(key, Math.round(newVal * 100) / 100 as any)
+      barFill.width = barW * newVal
+      valText.setText(`${Math.round(newVal * 100)}%`)
+    })
+
+    this.settingsOverlay!.add([labelText, barBg, barFill, valText])
+    return y + 28
+  }
+
+  private closeSettingsOverlay() {
+    if (this.settingsOverlay) { this.settingsOverlay.destroy(); this.settingsOverlay = null }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COSMETICS OVERLAY
+  // ═══════════════════════════════════════════════════════════════
+
+  private showCosmeticsOverlay() {
+    if (this.cosmeticsOverlay) return
+    const { width, height } = this.scale
+    const cx = width / 2
+
+    this.cosmeticsOverlay = this.add.container(0, 0).setDepth(1000)
+    const overlay = this.add.rectangle(0, 0, width * 2, height * 2, 0x000000, 0.9).setOrigin(0)
+    this.cosmeticsOverlay.add(overlay)
+
+    const title = this.add.text(cx, 30, '🎨 COSMETICS', {
+      fontSize: '28px', fontStyle: 'bold', color: '#ff66cc', stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5)
+    this.cosmeticsOverlay.add(title)
+
+    // Tab buttons
+    const tabs: { label: string; category: CosmeticCategory }[] = [
+      { label: 'Skins', category: 'playerSkin' },
+      { label: 'Bullets', category: 'weaponSkin' },
+      { label: 'Kill FX', category: 'killEffect' },
+      { label: 'Titles', category: 'title' },
+      { label: 'Trails', category: 'trailEffect' },
+    ]
+
+    let activeTab: CosmeticCategory = 'playerSkin'
+    const tabY = 70
+    const tabW = Math.min(80, (width - 40) / tabs.length)
+
+    const renderTab = (category: CosmeticCategory) => {
+      // Remove previous items (all children after first 2 + tabs = keep first elements)
+      const keepCount = 2 + tabs.length * 2 // overlay bg + title + (bg + label per tab)
+      while (this.cosmeticsOverlay!.length > keepCount) {
+        const child = this.cosmeticsOverlay!.getAt(keepCount)
+        if (child) { (child as any).destroy?.(); this.cosmeticsOverlay!.removeAt(keepCount) }
+        else break
+      }
+
+      const equipped = cosmeticSystem.getEquipped()
+      let items: Array<{ id: string; name: string; unlocked: boolean; isEquipped: boolean; colorHint: number; desc: string }> = []
+
+      if (category === 'playerSkin') {
+        items = cosmeticSystem.getAllPlayerSkins().map(s => ({
+          id: s.id, name: s.name, unlocked: s.unlocked,
+          isEquipped: equipped.playerSkin === s.id,
+          colorHint: s.bodyColor, desc: s.unlock.description,
+        }))
+      } else if (category === 'weaponSkin') {
+        items = cosmeticSystem.getAllWeaponSkins().map(s => ({
+          id: s.id, name: s.name, unlocked: s.unlocked,
+          isEquipped: equipped.weaponSkin === s.id,
+          colorHint: s.bulletColor, desc: s.unlock.description,
+        }))
+      } else if (category === 'killEffect') {
+        items = cosmeticSystem.getAllKillEffects().map(e => ({
+          id: e.id, name: e.name, unlocked: e.unlocked,
+          isEquipped: equipped.killEffect === e.id,
+          colorHint: e.color, desc: e.unlock.description,
+        }))
+      } else if (category === 'title') {
+        items = cosmeticSystem.getAllTitles().map(t => ({
+          id: t.id, name: t.displayText || t.name, unlocked: t.unlocked,
+          isEquipped: equipped.title === t.id,
+          colorHint: t.color, desc: t.unlock.description,
+        }))
+      } else if (category === 'trailEffect') {
+        items = cosmeticSystem.getAllTrailEffects().map(t => ({
+          id: t.id, name: t.name, unlocked: t.unlocked,
+          isEquipped: equipped.trailEffect === t.id,
+          colorHint: t.color, desc: t.unlock.description,
+        }))
+      }
+
+      const cols = Math.min(4, Math.floor((width - 40) / 140))
+      const cardW = Math.min(130, (width - 40) / cols - 10)
+      const cardH = 70
+      const startX = cx - (cols * (cardW + 10)) / 2 + cardW / 2
+      const startY = tabY + 50
+
+      items.forEach((item, i) => {
+        const row = Math.floor(i / cols)
+        const col = i % cols
+        const x = startX + col * (cardW + 10)
+        const y = startY + row * (cardH + 8)
+
+        if (y > height - 50) return // Skip if off screen
+
+        const bgColor = item.isEquipped ? 0x00d9ff : item.unlocked ? COLORS.panel : 0x111111
+        const bg = this.add.rectangle(x, y, cardW, cardH, bgColor, item.isEquipped ? 0.35 : 0.25)
+        bg.setStrokeStyle(2, item.isEquipped ? COLORS.highlight : item.unlocked ? item.colorHint : 0x333333, item.unlocked ? 0.8 : 0.3)
+        if (item.unlocked && !item.isEquipped) bg.setInteractive({ useHandCursor: true })
+        this.cosmeticsOverlay!.add(bg)
+
+        const colorDot = this.add.circle(x - cardW / 2 + 15, y - 10, 6, item.unlocked ? item.colorHint : 0x333333)
+        this.cosmeticsOverlay!.add(colorDot)
+
+        const nameText = this.add.text(x - cardW / 2 + 28, y - 16, item.unlocked ? item.name : '???', {
+          fontSize: '11px', fontStyle: 'bold', color: item.unlocked ? '#ffffff' : '#555555',
+          wordWrap: { width: cardW - 35 }
+        }).setOrigin(0, 0)
+        this.cosmeticsOverlay!.add(nameText)
+
+        const descText = this.add.text(x, y + 16, item.isEquipped ? 'EQUIPPED' : (item.unlocked ? 'Click to equip' : item.desc), {
+          fontSize: '9px', color: item.isEquipped ? '#00d9ff' : item.unlocked ? '#88c0d0' : '#666666',
+          wordWrap: { width: cardW - 10 }, align: 'center'
+        }).setOrigin(0.5)
+        this.cosmeticsOverlay!.add(descText)
+
+        if (item.unlocked && !item.isEquipped) {
+          bg.on('pointerdown', () => {
+            cosmeticSystem.equip(category, item.id)
+            this.closeCosmeticsOverlay()
+            this.showCosmeticsOverlay()
+          })
+          bg.on('pointerover', () => bg.setStrokeStyle(3, COLORS.highlight, 1))
+          bg.on('pointerout', () => bg.setStrokeStyle(2, item.colorHint, 0.8))
+        }
+      })
+    }
+
+    // Create tab buttons
+    tabs.forEach((tab, i) => {
+      const tx = cx - (tabs.length * tabW) / 2 + tabW / 2 + i * tabW
+      const isActive = tab.category === activeTab
+      const bg = this.add.rectangle(tx, tabY, tabW - 4, 24, isActive ? COLORS.accent : COLORS.panel, 0.9)
+      bg.setStrokeStyle(1, isActive ? COLORS.highlight : COLORS.accent, isActive ? 1 : 0.5)
+      bg.setInteractive({ useHandCursor: true })
+      const label = this.add.text(tx, tabY, tab.label, {
+        fontSize: '11px', fontStyle: 'bold', color: isActive ? '#ffffff' : '#88c0d0'
+      }).setOrigin(0.5)
+      this.cosmeticsOverlay!.add([bg, label])
+
+      bg.on('pointerdown', () => {
+        activeTab = tab.category
+        this.closeCosmeticsOverlay()
+        this.showCosmeticsOverlay()
+      })
+    })
+
+    // Render initial tab
+    renderTab(activeTab)
+
+    this.addCloseButton(this.cosmeticsOverlay, () => this.closeCosmeticsOverlay())
+  }
+
+  private closeCosmeticsOverlay() {
+    if (this.cosmeticsOverlay) { this.cosmeticsOverlay.destroy(); this.cosmeticsOverlay = null }
+  }
+
+  private addCloseButton(container: Phaser.GameObjects.Container, onClose: () => void) {
+    const { width } = this.scale
+    const closeBtn = this.add.text(width - 40, 20, '✕', {
+      fontSize: '28px', fontStyle: 'bold', color: '#ff4444'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
+    closeBtn.on('pointerdown', onClose)
+    closeBtn.on('pointerover', () => closeBtn.setScale(1.2))
+    closeBtn.on('pointerout', () => closeBtn.setScale(1))
+    container.add(closeBtn)
   }
 
   shutdown() {

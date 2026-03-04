@@ -31,6 +31,20 @@ import { weaponMastery } from './WeaponMastery'
 import { getCombinedSetEffects, getActiveSetBonuses, getSetProgress, ITEM_SETS } from './ItemSets'
 import { endlessMode, EndlessModeManager } from './EndlessMode'
 import { challengeModes, ChallengeMode, ChallengeModeConfig, CHALLENGE_MODES } from './ChallengeModes'
+// NEXUS UPDATE
+import { ArtifactDefinition, ArtifactEffect, ARTIFACT_POOL, rollArtifactDrop } from './ItemSystem'
+import { FloorHazardType, HazardConfig, HAZARD_CONFIGS, getHazardsForFloor } from './FloorThemes'
+// CONVERGENCE UPDATE
+import { prestigeSystem } from './PrestigeSystem'
+import { elementalSystem, ELEMENT_CONFIGS, ElementType } from './ElementalSystem'
+import { companionSystem, COMPANION_DEFINITIONS, CompanionType } from './CompanionSystem'
+import { settingsManager } from './SettingsManager'
+import { getSeasonPassManager } from './SeasonalEvents'
+// EVOLUTION UPDATE
+import { craftingSystem, GEM_DEFINITIONS } from './CraftingSystem'
+import { eventSystem, FloorEventConfig, BLESSINGS, CURSED_PAIRS, NPC_CONFIGS, NPCType } from './EventSystem'
+import { codexSystem } from './CodexSystem'
+import { cosmeticSystem, KillEffectType } from './CosmeticSystem'
 
 // Class weapon pools: each class has 3 weapons they can switch between
 const CLASS_WEAPON_POOLS: Record<string, number[]> = {
@@ -87,6 +101,55 @@ export default class GameSceneV3 extends Phaser.Scene {
   private visibilityOverlay: Phaser.GameObjects.Graphics | null = null
   private activeSetEffects: Record<string, any> = {}
   private hasAutoRevive = false
+
+  // NEXUS UPDATE: Tutorial system
+  private tutorialStep = 0 // 0 = inactive, 1-7 = steps
+  private tutorialElements: Phaser.GameObjects.GameObject[] = []
+  private tutorialActive = false
+  private tutorialMovementDetected = false
+  private tutorialShotFired = false
+  private tutorialReloaded = false
+  private tutorialKillCount = 0
+
+  // NEXUS UPDATE: Floor hazards
+  private activeHazards: Array<{
+    sprite: Phaser.GameObjects.Arc
+    config: HazardConfig
+    x: number
+    y: number
+    lastDamageTime: number
+    isWarning: boolean
+    activationTime: number
+  }> = []
+
+  // NEXUS UPDATE: Interactable objects
+  private healthStations: Array<{ sprite: Phaser.GameObjects.Container; used: boolean; x: number; y: number }> = []
+  private ammoCrates: Phaser.GameObjects.Arc[] = []
+  private explodingBarrels: Array<{ sprite: Phaser.GameObjects.Arc; x: number; y: number; health: number }> = []
+
+  // NEXUS UPDATE: Artifact passive timer
+  private lastArtifactPassiveCheck = 0
+
+  // CONVERGENCE UPDATE: Companion visual + AI
+  private companionVisual: Phaser.GameObjects.Arc | null = null
+  private companionOrbitAngle = 0
+  private companionLastAttackTime = 0
+  private companionShieldReady = true
+  private companionShieldCooldownEnd = 0
+  private companionLastHealTick = 0
+  // CONVERGENCE UPDATE: Elemental DOT tracking
+  private enemyDOTs: Map<any, { element: ElementType, dps: number, endTime: number, lastTick: number }> = new Map()
+  private enemySlows: Map<any, { percent: number, endTime: number }> = new Map()
+
+  // EVOLUTION UPDATE: Kill streaks, floor events, cosmetics
+  private killStreakCount = 0
+  private killStreakLastTime = 0
+  private activeFloorEvent: FloorEventConfig | null = null
+  private activeNPCType: NPCType | null = null
+  private floorEventElements: Phaser.GameObjects.GameObject[] = []
+  private npcElements: Phaser.GameObjects.GameObject[] = []
+  private treasureGoblin: Phaser.GameObjects.Arc | null = null
+  private treasureGoblinTimer: Phaser.Time.TimerEvent | null = null
 
   private currentUserId: string | null = null
   private currentPlayerName: string = 'Player'
@@ -217,6 +280,9 @@ export default class GameSceneV3 extends Phaser.Scene {
       this.showAchievementUnlock(achievement)
     })
 
+    // EVOLUTION UPDATE: Reset event system for new run
+    try { eventSystem.resetForNewRun() } catch (e) { /* ignore */ }
+
     // Start background music (after user interaction)
     this.input.once('pointerdown', () => {
       this.audioManager.enableAudio()
@@ -311,6 +377,61 @@ export default class GameSceneV3 extends Phaser.Scene {
       })
     }
 
+    // CONVERGENCE UPDATE: Load prestige bonuses
+    this.player.loadPrestigeBonuses()
+    const ngTier = prestigeSystem.getNGPlusTier()
+    if (ngTier > 0) {
+      this.time.delayedCall(2500, () => {
+        this.addKillFeedMessage(`⭐ NG+${ngTier} — Enemies are stronger, loot is better!`, '#9b59b6', 5000)
+      })
+    }
+    if (prestigeSystem.getPrestigeLevel() > 0) {
+      this.time.delayedCall(3000, () => {
+        this.addKillFeedMessage(`🌟 Prestige ${prestigeSystem.getPrestigeLevel()} — Ascension bonuses active!`, '#ffd700', 4000)
+      })
+    }
+
+    // CONVERGENCE UPDATE: Load companion bonuses and create visual
+    this.player.loadCompanionBonuses()
+    if (companionSystem.getActiveCompanion()) {
+      this.createCompanionVisual()
+      const compDef = companionSystem.getActiveCompanionDef()
+      if (compDef) {
+        this.time.delayedCall(3500, () => {
+          this.addKillFeedMessage(`${compDef.icon} ${compDef.name} companion active!`, '#44ff44', 4000)
+        })
+      }
+    }
+
+    // EVOLUTION UPDATE: Load crafting and blessing bonuses
+    try {
+      this.player.loadCraftingBonuses()
+      this.player.loadBlessingBonuses()
+    } catch (e) { /* ignore */ }
+
+    // EVOLUTION UPDATE: Listen for boss phase change events
+    window.addEventListener('bossPhaseChange', ((e: CustomEvent) => {
+      try {
+        const { phase, bossName } = e.detail || {}
+        this.addKillFeedMessage(`⚡ ${bossName || 'BOSS'} — PHASE ${phase}!`, '#ff4444', 3000)
+        if (this.visualEffects) {
+          this.visualEffects.shakeScreen('heavy')
+        }
+        // Red flash
+        const flash = this.add.rectangle(
+          this.cameras.main.worldView.centerX, this.cameras.main.worldView.centerY,
+          this.cameras.main.width, this.cameras.main.height, 0xff0000, 0.3
+        ).setScrollFactor(0).setDepth(9999)
+        this.tweens.add({ targets: flash, alpha: 0, duration: 500, onComplete: () => flash.destroy() })
+      } catch (e) { /* ignore */ }
+    }) as EventListener)
+
+    // CONVERGENCE UPDATE: Apply settings
+    const screenShake = settingsManager.get('screenShake')
+    if (!screenShake) {
+      // Will be checked in shake calls
+    }
+
     // Get current user from auth context (passed via registry from React)
     const currentUser = this.registry.get('currentUser')
     if (currentUser) {
@@ -355,16 +476,38 @@ export default class GameSceneV3 extends Phaser.Scene {
     // Create item drops group
     this.itemDrops = this.add.group()
 
-    // Minimap disabled - conflicts with React HUD overlay
-    // The React UI covers top-left (stats), top-right (money/mission),
-    // bottom-left (controls), bottom-right (weapon)
-    // TODO: Add minimap as React component instead if needed
+    // EVOLUTION UPDATE: Conditionally enable minimap based on settings
+    try {
+      if (settingsManager.get('showMinimap')) {
+        this.minimap = new Minimap(this, { worldWidth: this.worldWidth, worldHeight: this.worldHeight })
+        this.minimap.setTrackables(this.player, this.enemies, this.bosses, this.itemDrops)
+      }
+    } catch (e) {
+      // Minimap init failed, continue without it
+    }
 
     // Create persistent UI
     this.createPersistentUI()
 
     // Spawn initial floor (DotSlayer procedural system!)
     this.loadFloor()
+
+    // NEXUS UPDATE: Start tutorial for new players
+    if (typeof window !== 'undefined' && localStorage.getItem('dotslayer_tutorial_complete') !== 'true') {
+      this.startTutorial()
+    }
+
+    // NEXUS UPDATE: Listen for boss loot explosion events
+    if (typeof window !== 'undefined') {
+      const lootExplosionHandler = (event: Event) => {
+        const customEvent = event as CustomEvent
+        this.handleBossLootExplosion(customEvent.detail)
+      }
+      window.addEventListener('bossLootExplosion', lootExplosionHandler)
+      this.events.on('destroy', () => {
+        window.removeEventListener('bossLootExplosion', lootExplosionHandler)
+      })
+    }
 
     // Camera setup
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
@@ -1082,18 +1225,21 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.input.keyboard!.on('keydown-ONE', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
         this.player.switchWeapon(0)
+        try { this.player.loadCraftingBonuses() } catch (e) { /* ignore */ }
         this.emitGameEvent('weaponSwitch', { slot: 0, weapons: this.player.classWeapons })
       }
     })
     this.input.keyboard!.on('keydown-TWO', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
         this.player.switchWeapon(1)
+        try { this.player.loadCraftingBonuses() } catch (e) { /* ignore */ }
         this.emitGameEvent('weaponSwitch', { slot: 1, weapons: this.player.classWeapons })
       }
     })
     this.input.keyboard!.on('keydown-THREE', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
         this.player.switchWeapon(2)
+        try { this.player.loadCraftingBonuses() } catch (e) { /* ignore */ }
         this.emitGameEvent('weaponSwitch', { slot: 2, weapons: this.player.classWeapons })
       }
     })
@@ -1150,17 +1296,31 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.input.keyboard!.on('keydown-R', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
         this.player.reload()
+        // NEXUS UPDATE: Tutorial step 3
+        if (this.tutorialActive && this.tutorialStep === 3) this.advanceTutorial()
+        // NEXUS UPDATE: Artifact on-reload trigger
+        const rEffect = this.player.onReloadArtifact()
+        if (rEffect) this.executeArtifactEffect(rEffect, this.player.x, this.player.y)
       }
     })
 
     // Skill tree (T key)
-    this.input.keyboard!.on('keydown-T', () => this.toggleSkillTree())
+    this.input.keyboard!.on('keydown-T', () => {
+      this.toggleSkillTree()
+      if (this.tutorialActive && this.tutorialStep === 6) this.advanceTutorial()
+    })
 
     // Shop (B key)
-    this.input.keyboard!.on('keydown-B', () => this.shopUI.toggle())
+    this.input.keyboard!.on('keydown-B', () => {
+      this.shopUI.toggle()
+      if (this.tutorialActive && this.tutorialStep === 5) this.advanceTutorial()
+    })
 
     // Inventory (I key)
-    this.input.keyboard!.on('keydown-I', () => this.toggleInventory())
+    this.input.keyboard!.on('keydown-I', () => {
+      this.toggleInventory()
+      if (this.tutorialActive && this.tutorialStep === 7) this.advanceTutorial()
+    })
 
     // U key: UI Settings menu
     this.input.keyboard!.on('keydown-U', () => {
@@ -1308,7 +1468,13 @@ export default class GameSceneV3 extends Phaser.Scene {
 
       // Auto-fire on mouse hold
       if (this.input.activePointer.isDown && this.input.activePointer.leftButtonDown()) {
+        const prevAmmo = this.player.currentAmmo
         this.player.shoot(this.input.activePointer.worldX, this.input.activePointer.worldY)
+        // NEXUS UPDATE: Artifact on-shot trigger (only if we actually fired)
+        if (this.player.currentAmmo < prevAmmo) {
+          const shotEffect = this.player.onShotFired()
+          if (shotEffect) this.executeArtifactEffect(shotEffect, this.player.x, this.player.y)
+        }
       }
     }
 
@@ -1392,6 +1558,31 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     // ROGUELIKE: Update enemy locators
     this.updateEnemyLocators()
+
+    // NEXUS UPDATE: Check floor hazard collisions
+    this.checkHazardCollisions(delta)
+
+    // NEXUS UPDATE: Check interactable proximity
+    this.checkInteractableProximity()
+
+    // NEXUS UPDATE: Check artifact passive effects
+    if (time - this.lastArtifactPassiveCheck > 500) {
+      this.lastArtifactPassiveCheck = time
+      const effect = this.player.checkPassiveArtifact()
+      if (effect) this.executeArtifactEffect(effect, this.player.x, this.player.y)
+    }
+
+    // NEXUS UPDATE: Update tutorial progress
+    if (this.tutorialActive) this.updateTutorial()
+
+    // CONVERGENCE UPDATE: Update companion AI
+    this.updateCompanion(time, delta)
+
+    // CONVERGENCE UPDATE: Process elemental DOTs and slows
+    this.processElementalEffects(time, delta)
+
+    // CONVERGENCE UPDATE: Prestige regen
+    this.player.updatePrestigeRegen()
   }
 
   // ROGUELIKE: Enemy locator for finding last enemies!
@@ -1516,6 +1707,16 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.treasureChests.forEach(chest => chest.destroy())
     this.treasureChests = []
 
+    // NEXUS UPDATE: Clear hazards and interactables
+    this.activeHazards.forEach(h => h.sprite.destroy())
+    this.activeHazards = []
+    this.healthStations.forEach(h => h.sprite.destroy())
+    this.healthStations = []
+    this.ammoCrates.forEach(c => c.destroy())
+    this.ammoCrates = []
+    this.explodingBarrels.forEach(b => b.sprite.destroy())
+    this.explodingBarrels = []
+
     // Reset counters
     this.enemiesKilled = 0
     this.bossSpawned = false
@@ -1582,6 +1783,43 @@ export default class GameSceneV3 extends Phaser.Scene {
     // Create special room objects
     this.createRoomObjects(floor)
 
+    // EVOLUTION UPDATE: Tick event system blessings/curses + reload bonuses
+    try {
+      eventSystem.tickFloor()
+      this.player.loadBlessingBonuses()
+    } catch (e) { /* ignore */ }
+
+    // EVOLUTION UPDATE: Check for floor events
+    try {
+      this.activeFloorEvent = eventSystem.shouldTriggerEvent(floorNum)
+      this.activeNPCType = this.activeFloorEvent ? eventSystem.shouldSpawnNPC() : null
+      if (this.activeFloorEvent) {
+        this.triggerFloorEvent(this.activeFloorEvent, floorNum)
+      }
+      if (this.activeNPCType) {
+        this.spawnNPCEncounter(this.activeNPCType, floorNum)
+      }
+    } catch (e) { /* ignore */ }
+
+    // NEXUS UPDATE: Spawn floor hazards (from floor 5+)
+    this.spawnFloorHazards(floorNum)
+
+    // NEXUS UPDATE: Spawn interactable objects
+    this.spawnInteractables(floorNum)
+
+    // NEXUS UPDATE: Spawn mini-boss on mini-boss floors
+    if (floor.specialModifier === 'mini_boss_floor') {
+      this.spawnMiniBoss(floorNum)
+    }
+
+    // NEXUS UPDATE: Boss arena hazards on boss floors
+    if (floor.specialModifier === 'boss_floor') {
+      this.time.delayedCall(2000, () => this.spawnBossArenaHazards(floorNum))
+    }
+
+    // NEXUS UPDATE: Progressive hints
+    this.showProgressiveHints(floorNum)
+
     // Apply floor theme (NEW VISUAL VARIETY!) - with safety check
     let theme: any = { name: 'DotSlayer' }
     try {
@@ -1607,6 +1845,9 @@ export default class GameSceneV3 extends Phaser.Scene {
     if (modifier === 'boss_floor') {
       message = `Floor ${floorNum} - BOSS FLOOR!`
       color = '#ff0266'
+    } else if (modifier === 'mini_boss_floor') {
+      message = `Floor ${floorNum} - Mini-Boss ${theme.name}!`
+      color = '#e67e22'
     } else if (modifier === 'elite_floor') {
       message = `Floor ${floorNum} - Elite ${theme.name}`
       color = '#ff6b00'
@@ -1839,6 +2080,11 @@ export default class GameSceneV3 extends Phaser.Scene {
       endlessDamageMult = endlessMode.getDamageMultiplier()
     }
 
+    // CONVERGENCE UPDATE: NG+ difficulty scaling
+    const ngMods = prestigeSystem.getNGPlusModifiers()
+    const ngHPMult = ngMods.enemyHpMult
+    const ngDamageMult = ngMods.enemyDmgMult
+
     // Challenge mode gold/XP multipliers are applied in handleEnemyDeath
 
     // Spawn enemies in open world (simple and reliable!)
@@ -1863,17 +2109,28 @@ export default class GameSceneV3 extends Phaser.Scene {
         enemy.maxHealth = enemy.health
       }
 
-      // Apply modifier effects to enemy stats
-      if (hpMult !== 1 || endlessHPMult !== 1) {
-        enemy.health *= hpMult * endlessHPMult
+      // Apply modifier effects to enemy stats (includes NG+ scaling)
+      if (hpMult !== 1 || endlessHPMult !== 1 || ngHPMult !== 1) {
+        enemy.health *= hpMult * endlessHPMult * ngHPMult
         enemy.maxHealth = enemy.health
       }
-      if (damageMult !== 1 || endlessDamageMult !== 1) {
-        enemy.damage = (enemy.damage || 10) * damageMult * endlessDamageMult
+      if (damageMult !== 1 || endlessDamageMult !== 1 || ngDamageMult !== 1) {
+        enemy.damage = (enemy.damage || 10) * damageMult * endlessDamageMult * ngDamageMult
       }
       if (speedMult !== 1) {
         enemy.speed = (enemy.speed || 100) * speedMult
       }
+
+      // EVOLUTION UPDATE: Record enemy encounter in codex
+      try {
+        const stats = ENEMY_STATS[type]
+        if (stats) {
+          const currentFloor = this.isEndlessMode ? endlessMode.getCurrentFloor() : this.floorManager.getCurrentFloorNumber()
+          codexSystem.recordEnemyEncounter(type, type, currentFloor, {
+            hp: stats.health, speed: stats.speed, damage: stats.damage || 10, color: stats.color, size: stats.size || 24,
+          })
+        }
+      } catch (e) { /* ignore */ }
 
       this.enemies.add(enemy)
     }
@@ -1970,6 +2227,11 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     this.bosses.add(boss)
     this.bossSpawned = true
+
+    // EVOLUTION UPDATE: Boss intro sequence
+    try {
+      this.showBossIntro(BOSS_CONFIGS[bossType])
+    } catch (e) { /* ignore */ }
 
     this.addKillFeedMessage(`💀 FLOOR ${floorNumber} BOSS! 💀`, '#ff0266', 5000)
   }
@@ -2233,13 +2495,50 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     bullet.destroy()
 
-    const killed = enemy.takeDamage(finalDamage)
+    // CONVERGENCE UPDATE: Apply elemental effects on hit
+    const weaponElement = this.player.getCurrentWeaponElement()
+    if (weaponElement && enemy.active) {
+      this.applyElementalEffect(enemy, weaponElement)
+    }
+
+    // CONVERGENCE UPDATE: Void element bonus damage (% of max HP)
+    let voidBonusDamage = 0
+    if (weaponElement?.hpPercent && enemy.maxHealth) {
+      voidBonusDamage = Math.floor(enemy.maxHealth * weaponElement.hpPercent)
+    }
+
+    const killed = enemy.takeDamage(finalDamage + voidBonusDamage)
 
     if (killed) {
       this.enemiesKilled++
 
       // VAMPIRE CLASS: Heal on kill
       this.player.onKillEnemy()
+
+      // CONVERGENCE UPDATE: Track elemental kills
+      if (weaponElement) {
+        const elemType = elementalSystem.getWeaponElement(this.player.getCurrentWeaponName())
+        if (elemType) elementalSystem.recordElementalKill(elemType)
+      }
+
+      // CONVERGENCE UPDATE: Companion XP on kill
+      const companionLevelUp = companionSystem.addXP(1)
+      if (companionLevelUp?.leveled) {
+        this.audioManager.playSound('companionLevelUp')
+        this.addKillFeedMessage(`🐾 Companion Level ${companionLevelUp.newLevel}!`, '#44ff44', 3000)
+      }
+
+      // CONVERGENCE UPDATE: Season pass points for kills (every 10 kills)
+      if (this.runStats.totalKills % 10 === 0) {
+        getSeasonPassManager().addPoints(10, 'kills')
+      }
+
+      // NEXUS UPDATE: Artifact on-kill trigger
+      const artifactEffect = this.player.onEnemyKilledArtifact()
+      if (artifactEffect) this.executeArtifactEffect(artifactEffect, enemy.x, enemy.y)
+
+      // NEXUS UPDATE: Tutorial kill tracking
+      if (this.tutorialActive) this.tutorialKillCount++
 
       // Play kill sound
       this.audioManager.playSound('kill')
@@ -2303,6 +2602,74 @@ export default class GameSceneV3 extends Phaser.Scene {
       // Drop power-up chance
       this.powerUpManager.tryDropPowerUp(enemy.x, enemy.y)
 
+      // CONVERGENCE UPDATE: Drop elemental core chance
+      this.tryDropElementalCore(enemy.x, enemy.y, enemy.isBoss?.() || false)
+
+      // EVOLUTION UPDATE: Drop crafting materials
+      try {
+        const currentFloor = this.isEndlessMode ? endlessMode.getCurrentFloor() : this.floorManager.getCurrentFloorNumber()
+        const floorTheme = getThemeForFloor(currentFloor)?.name || 'arena'
+        const materialDrop = craftingSystem.rollMaterialDrop(currentFloor, floorTheme, enemy.isBoss?.() || false)
+        if (materialDrop) {
+          if (materialDrop.type === 'shard' && materialDrop.element) {
+            craftingSystem.addShards(materialDrop.element, 1)
+            if (this.runStats.totalKills % 5 === 0) { // Show every 5th drop to reduce spam
+              this.addKillFeedMessage(`+1 ${materialDrop.element} shard`, '#88c0d0', 1500)
+            }
+          } else if (materialDrop.type === 'essence' && materialDrop.rarity) {
+            craftingSystem.addEssence(materialDrop.rarity, 1)
+          } else if (materialDrop.type === 'gem' && materialDrop.gemId) {
+            craftingSystem.addGem(materialDrop.gemId)
+            const gemDef = GEM_DEFINITIONS.find(g => g.id === materialDrop.gemId)
+            if (gemDef) this.addKillFeedMessage(`💎 ${gemDef.name} gem found!`, '#00d9ff', 3000)
+          }
+        }
+      } catch (e) { /* ignore */ }
+
+      // EVOLUTION UPDATE: Codex tracking
+      try {
+        const enemyType = enemy.enemyType || 'unknown'
+        codexSystem.recordEnemyKill(enemyType, this.player.getCurrentWeaponName())
+      } catch (e) { /* ignore */ }
+
+      // EVOLUTION UPDATE: Bounty tracking
+      try {
+        const enemyType = enemy.enemyType || 'unknown'
+        const bountyResult = eventSystem.updateBountyProgress(enemyType)
+        if (bountyResult?.completed) {
+          const b = bountyResult.bounty
+          this.player.addMoney(b.goldReward)
+          this.addKillFeedMessage(`🎯 BOUNTY COMPLETE! +$${b.goldReward}`, '#ffd700', 5000)
+          this.audioManager.playSound('upgrade')
+        }
+      } catch (e) { /* ignore */ }
+
+      // EVOLUTION UPDATE: Kill streak tracking
+      try {
+        const now = Date.now()
+        if (now - this.killStreakLastTime < 3000) {
+          this.killStreakCount++
+        } else {
+          this.killStreakCount = 1
+        }
+        this.killStreakLastTime = now
+        this.showKillStreakAnnouncement(this.killStreakCount)
+      } catch (e) { /* ignore */ }
+
+      // CONVERGENCE UPDATE: Check companion unlock from boss
+      if (enemy.isBoss?.()) {
+        const bossFloor = this.floorManager.getCurrentFloorNumber()
+        const companionDrop = companionSystem.shouldDropCompanion(bossFloor)
+        if (companionDrop) {
+          companionSystem.unlockCompanion(companionDrop)
+          const def = COMPANION_DEFINITIONS[companionDrop]
+          this.addKillFeedMessage(`${def.icon} NEW COMPANION: ${def.name}!`, '#44ff44', 6000)
+          this.audioManager.playSound('companionLevelUp')
+        }
+        // Season pass points for boss kills
+        getSeasonPassManager().addPoints(25, 'boss_kill')
+      }
+
       // Drop item chance (DotSlayer loot system!)
       // Check noDrops modifier
       if (!this.activeModifierEffects.noDrops) {
@@ -2330,9 +2697,29 @@ export default class GameSceneV3 extends Phaser.Scene {
         if (this.visualEffects) {
           const enemyType = enemy.enemyType as EnemyType
           const enemyColor = (enemyType && ENEMY_STATS[enemyType]?.color) || 0xff0000
-          this.visualEffects.createDeathExplosion(enemy.x, enemy.y, enemyColor, enemy.isBoss() ? 1.5 : 1)
+
+          // EVOLUTION UPDATE: Use cosmetic kill effect if equipped
+          try {
+            const killEffect = cosmeticSystem.getActiveKillEffect()
+            if (killEffect.effectType !== 'explosion') {
+              this.visualEffects.createKillEffect(enemy.x, enemy.y, killEffect.effectType, killEffect.color, enemy.isBoss() ? 1.5 : 1)
+            } else {
+              this.visualEffects.createDeathExplosion(enemy.x, enemy.y, enemyColor, enemy.isBoss() ? 1.5 : 1)
+            }
+          } catch (e) {
+            this.visualEffects.createDeathExplosion(enemy.x, enemy.y, enemyColor, enemy.isBoss() ? 1.5 : 1)
+          }
+
           this.visualEffects.showMoneyGain(enemy.x, enemy.y - 20, money)
           this.visualEffects.showXPGain(enemy.x + 30, enemy.y - 20, xp)
+
+          // EVOLUTION UPDATE: Damage-scaled screen shake and hit-stop on kills
+          try {
+            this.visualEffects.shakeScreenScaled(damage, false)
+            if (damage > 200) {
+              this.visualEffects.hitStop(40)
+            }
+          } catch (e) { /* ignore */ }
 
           // Check combo milestones
           this.visualEffects.showComboMilestone(combo.combo)
@@ -2572,6 +2959,12 @@ export default class GameSceneV3 extends Phaser.Scene {
       this.createLegendaryParticles(itemDrop.x, itemDrop.y)
     }
 
+    // EVOLUTION UPDATE: Track item in codex
+    try {
+      const currentFloor = this.isEndlessMode ? endlessMode.getCurrentFloor() : this.floorManager.getCurrentFloorNumber()
+      codexSystem.recordItemDiscovery(item.id, item.name, item.rarity, currentFloor, item.description, item.color)
+    } catch (e) { /* ignore */ }
+
     // Collect the item (applies effect and shows message)
     itemDrop.collect(player)
 
@@ -2761,6 +3154,12 @@ export default class GameSceneV3 extends Phaser.Scene {
     dailyChallengeManager.updateProgress('gold', moneyReward)
 
     this.addKillFeedMessage(`Floor ${floorNum} Complete! +$${moneyReward} +${xpReward}XP`, '#2ecc71', 6000)
+
+    // EVOLUTION UPDATE: Floor clear celebration
+    try {
+      this.showFloorClearCelebration(floorNum)
+      codexSystem.forceSave() // Batch save bestiary/item data
+    } catch (e) { /* ignore */ }
 
     // Check for achievements
     this.checkAchievementsProgress()
@@ -2963,6 +3362,28 @@ export default class GameSceneV3 extends Phaser.Scene {
     }
 
     this.achievementManager.checkAchievements(stats)
+
+    // EVOLUTION UPDATE: Check cosmetic unlocks
+    try {
+      const bestiaryCompletion = codexSystem.getBestiaryCompletion()
+      const itemCompletion = codexSystem.getItemCodexCompletion()
+      const lifetimeStats = codexSystem.getLifetimeStats()
+      const newCosmetics = cosmeticSystem.checkAllUnlocks({
+        totalKills: lifetimeStats.totalKills + this.runStats.totalKills,
+        prestigeLevel: prestigeSystem.getPrestigeLevel(),
+        highestFloor: Math.max(lifetimeStats.highestFloorEver, this.floorManager.getCurrentFloorNumber()),
+        maxMasteryRank: weaponMastery.getHighestRank(),
+        codexItemPercent: itemCompletion.percent,
+        codexBestiaryPercent: bestiaryCompletion.percent,
+        bossKills: this.runStats.bossesKilled + (lifetimeStats.totalKills > 0 ? Math.floor(lifetimeStats.totalKills / 100) : 0),
+        companionLevel: companionSystem.getActiveCompanionLevel(),
+        victoryCount: lifetimeStats.totalVictories,
+      })
+      for (const name of newCosmetics) {
+        this.addKillFeedMessage(`🎨 UNLOCKED: ${name}!`, '#ffd700', 5000)
+        this.audioManager.playSound('upgrade')
+      }
+    } catch (e) { /* ignore */ }
   }
 
   private showAchievementUnlock(achievement: any) {
@@ -3548,6 +3969,23 @@ export default class GameSceneV3 extends Phaser.Scene {
       return
     }
 
+    // CONVERGENCE UPDATE: Prestige extra life
+    if (this.player.checkPrestigeExtraLife()) {
+      this.cameras.main.flash(500, 255, 215, 0)
+      return
+    }
+
+    // NEXUS UPDATE: Artifact revive (Phoenix Plume)
+    const reviveEffect = this.player.onPlayerDeathArtifact()
+    if (reviveEffect) {
+      this.executeArtifactEffect(reviveEffect, this.player.x, this.player.y)
+      return
+    }
+
+    // CONVERGENCE UPDATE: Season pass points for floor completion
+    const finalFloor = this.floorManager.getCurrentFloorNumber()
+    getSeasonPassManager().addPoints(finalFloor * 10, 'floor_clear')
+
     this.isGameOver = true
 
     // Stop all physics and game systems
@@ -3579,6 +4017,32 @@ export default class GameSceneV3 extends Phaser.Scene {
     if (this.isEndlessMode) {
       endlessMode.endRun()
     }
+
+    // EVOLUTION UPDATE: Record run in codex
+    try {
+      const finalFloor2 = this.floorManager.getCurrentFloorNumber()
+      codexSystem.recordRun({
+        floorReached: finalFloor2,
+        totalKills: this.runStats.totalKills,
+        bossesKilled: this.runStats.bossesKilled,
+        timePlayed: Date.now() - this.runStats.startTime,
+        score: this.runStats.totalKills * 10 + finalFloor2 * 100,
+        goldEarned: this.runStats.totalMoney,
+        itemsCollected: this.itemsCollectedThisRun,
+        legendariesFound: this.legendariesCollectedThisRun,
+        highestCombo: this.runStats.highestCombo,
+        damageDealt: this.runStats.damageDealt,
+        damageTaken: this.runStats.damageTaken,
+        causeOfDeath: 'Killed by enemies',
+        playerClass: this.player.playerClass?.id || 'unknown',
+        weaponUsed: this.player.getCurrentWeaponName(),
+        artifactUsed: this.player.equippedArtifact?.name || 'None',
+        isVictory: false,
+        gameMode: this.isEndlessMode ? 'endless' : (this.activeChallengeMode?.id || 'standard'),
+      })
+      codexSystem.forceSave()
+      eventSystem.resetForNewRun()
+    } catch (e) { /* ignore */ }
 
     // Save cross-game synergy stats
     this.saveSynergyStats(false)
@@ -3632,6 +4096,32 @@ export default class GameSceneV3 extends Phaser.Scene {
     if (this.isEndlessMode) {
       endlessMode.endRun()
     }
+
+    // EVOLUTION UPDATE: Record victorious run in codex
+    try {
+      const victoryFloor = this.floorManager.getCurrentFloorNumber()
+      codexSystem.recordRun({
+        floorReached: victoryFloor,
+        totalKills: this.runStats.totalKills,
+        bossesKilled: this.runStats.bossesKilled,
+        timePlayed: Date.now() - this.runStats.startTime,
+        score: this.runStats.totalKills * 10 + victoryFloor * 100 + 5000,
+        goldEarned: this.runStats.totalMoney,
+        itemsCollected: this.itemsCollectedThisRun,
+        legendariesFound: this.legendariesCollectedThisRun,
+        highestCombo: this.runStats.highestCombo,
+        damageDealt: this.runStats.damageDealt,
+        damageTaken: this.runStats.damageTaken,
+        causeOfDeath: 'Victory!',
+        playerClass: this.player.playerClass?.id || 'unknown',
+        weaponUsed: this.player.getCurrentWeaponName(),
+        artifactUsed: this.player.equippedArtifact?.name || 'None',
+        isVictory: true,
+        gameMode: this.isEndlessMode ? 'endless' : (this.activeChallengeMode?.id || 'standard'),
+      })
+      codexSystem.forceSave()
+      eventSystem.resetForNewRun()
+    } catch (e) { /* ignore */ }
 
     // Save cross-game synergy stats - VICTORY!
     this.saveSynergyStats(true)
@@ -3875,7 +4365,17 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     // Visual effects
     try {
-      this.visualEffects.createDeathExplosion(enemy.x, enemy.y, enemy.color || 0xff0000, 1)
+      // EVOLUTION UPDATE: Use cosmetic kill effect
+      try {
+        const killEffect = cosmeticSystem.getActiveKillEffect()
+        if (killEffect.effectType !== 'explosion') {
+          this.visualEffects.createKillEffect(enemy.x, enemy.y, killEffect.effectType, killEffect.color, 1)
+        } else {
+          this.visualEffects.createDeathExplosion(enemy.x, enemy.y, enemy.color || 0xff0000, 1)
+        }
+      } catch (e) {
+        this.visualEffects.createDeathExplosion(enemy.x, enemy.y, enemy.color || 0xff0000, 1)
+      }
       this.visualEffects.showMoneyGain(enemy.x, enemy.y - 20, money)
     } catch (e) {
       // Silently ignore visual errors
@@ -5459,6 +5959,602 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.cameras.main.flash(200, r, g, b, true)
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: TUTORIAL SYSTEM
+  // ═══════════════════════════════════════════════════════════════
+  private startTutorial() {
+    this.tutorialActive = true
+    this.tutorialStep = 1
+    this.tutorialMovementDetected = false
+    this.tutorialShotFired = false
+    this.tutorialReloaded = false
+    this.tutorialKillCount = 0
+    this.showTutorialStep()
+  }
+
+  private showTutorialStep() {
+    // Clean up previous tutorial elements
+    this.tutorialElements.forEach(el => el.destroy())
+    this.tutorialElements = []
+
+    const sw = this.scale.width
+    const sh = this.scale.height
+    const cx = sw / 2
+
+    const steps: Record<number, { text: string; hint: string }> = {
+      1: { text: 'WASD to Move', hint: 'Move around the arena!' },
+      2: { text: 'Mouse to Aim, Click to Shoot', hint: 'Fire your weapon!' },
+      3: { text: 'Press R to Reload', hint: 'Reload when ammo runs low!' },
+      4: { text: 'Kill Enemies to Earn Gold & XP', hint: 'Defeat some enemies!' },
+      5: { text: 'Press B for Shop', hint: 'Buy upgrades between floors!' },
+      6: { text: 'Press T for Skill Tree', hint: 'Spend skill points!' },
+      7: { text: 'Press I for Inventory — Good Luck!', hint: 'You\'re ready!' },
+    }
+
+    const step = steps[this.tutorialStep]
+    if (!step) { this.completeTutorial(); return }
+
+    // Semi-transparent bottom panel
+    const panelH = 80
+    const panel = this.add.rectangle(cx, sh - panelH / 2 - 10, sw * 0.6, panelH, 0x000000, 0.7)
+      .setScrollFactor(0).setDepth(9500)
+    this.tutorialElements.push(panel)
+
+    const mainText = this.add.text(cx, sh - panelH / 2 - 20, step.text, {
+      fontSize: '28px', fontStyle: 'bold', color: '#00d9ff',
+      stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9501)
+    this.tutorialElements.push(mainText)
+
+    // Pulsing animation
+    this.tweens.add({ targets: mainText, scale: 1.05, duration: 800, yoyo: true, repeat: -1 })
+
+    const hintText = this.add.text(cx, sh - 30, step.hint, {
+      fontSize: '16px', color: '#88c0d0',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9501)
+    this.tutorialElements.push(hintText)
+
+    // Step counter
+    const stepText = this.add.text(cx, sh - panelH - 20, `Step ${this.tutorialStep}/7`, {
+      fontSize: '14px', color: '#555',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9501)
+    this.tutorialElements.push(stepText)
+  }
+
+  private updateTutorial() {
+    switch (this.tutorialStep) {
+      case 1: // Move
+        if (this.wasd.W.isDown || this.wasd.A.isDown || this.wasd.S.isDown || this.wasd.D.isDown) {
+          this.tutorialMovementDetected = true
+        }
+        if (this.tutorialMovementDetected) this.advanceTutorial()
+        break
+      case 2: // Shoot
+        if (this.input.activePointer.isDown) this.tutorialShotFired = true
+        if (this.tutorialShotFired) this.advanceTutorial()
+        break
+      case 3: // Reload - detected via key press
+        // Checked in input handler
+        break
+      case 4: // Kill enemies
+        if (this.tutorialKillCount >= 1) this.advanceTutorial()
+        break
+      case 5: // Shop
+      case 6: // Skill Tree
+      case 7: // Inventory
+        // These advance when the key is pressed (handled in input)
+        break
+    }
+  }
+
+  private advanceTutorial() {
+    this.tutorialStep++
+    if (this.tutorialStep > 7) {
+      this.completeTutorial()
+    } else {
+      this.showTutorialStep()
+    }
+  }
+
+  private completeTutorial() {
+    this.tutorialActive = false
+    this.tutorialElements.forEach(el => el.destroy())
+    this.tutorialElements = []
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dotslayer_tutorial_complete', 'true')
+    }
+    this.addKillFeedMessage('Tutorial Complete! Good luck, slayer!', '#2ecc71', 5000)
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: PROGRESSIVE HINTS
+  // ═══════════════════════════════════════════════════════════════
+  private showProgressiveHints(floorNum: number) {
+    if (typeof window === 'undefined') return
+    const shown = (key: string) => localStorage.getItem(key) === 'true'
+    const markShown = (key: string) => localStorage.setItem(key, 'true')
+
+    if (floorNum === 5 && !shown('dotslayer_hint_modifiers')) {
+      this.time.delayedCall(3000, () => this.addKillFeedMessage('Floor modifiers now active! Check the icons at top.', '#f39c12', 6000))
+      markShown('dotslayer_hint_modifiers')
+    }
+    if (floorNum === 5 && !shown('dotslayer_hint_miniboss')) {
+      this.time.delayedCall(5000, () => this.addKillFeedMessage('Mini-bosses appear on floors ending in 5!', '#e67e22', 6000))
+      markShown('dotslayer_hint_miniboss')
+    }
+    if (floorNum === 10 && !shown('dotslayer_hint_boss')) {
+      this.time.delayedCall(3000, () => this.addKillFeedMessage('Bosses have 3 phases — watch for visual changes!', '#ff0266', 6000))
+      markShown('dotslayer_hint_boss')
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: FLOOR HAZARD SYSTEM
+  // ═══════════════════════════════════════════════════════════════
+  private spawnFloorHazards(floorNum: number) {
+    const hazardTypes = getHazardsForFloor(floorNum)
+    if (hazardTypes.length === 0) return
+
+    // Scale count with floor number: 3 at floor 5, up to 8 at floor 100+
+    const count = Math.min(8, 3 + Math.floor(floorNum / 20))
+
+    for (let i = 0; i < count; i++) {
+      const type = Phaser.Math.RND.pick(hazardTypes)
+      const config = HAZARD_CONFIGS[type]
+
+      // Random position (avoid center spawn area)
+      let x: number, y: number
+      do {
+        x = Phaser.Math.Between(200, this.worldWidth - 200)
+        y = Phaser.Math.Between(200, this.worldHeight - 200)
+      } while (Phaser.Math.Distance.Between(x, y, this.worldWidth / 2, this.worldHeight / 2) < 300)
+
+      const sprite = this.add.circle(x, y, config.radius, config.color, 0.25)
+        .setDepth(50)
+        .setStrokeStyle(2, config.color, 0.5)
+
+      // Pulsing animation
+      this.tweens.add({
+        targets: sprite,
+        alpha: { from: 0.15, to: 0.35 },
+        duration: 1000 / config.pulseSpeed,
+        yoyo: true,
+        repeat: -1,
+      })
+
+      const isTimedHazard = config.burstDamage > 0 && config.warningTime > 0
+
+      this.activeHazards.push({
+        sprite,
+        config,
+        x, y,
+        lastDamageTime: 0,
+        isWarning: isTimedHazard,
+        activationTime: isTimedHazard ? Date.now() + config.warningTime + Math.random() * 2000 : 0
+      })
+
+      // For burst hazards (spike traps, geysers), set up periodic activation
+      if (isTimedHazard) {
+        const activateHazard = () => {
+          if (!sprite.active) return
+          // Warning flash
+          sprite.setFillStyle(config.color, 0.6)
+          this.time.delayedCall(config.warningTime, () => {
+            if (!sprite.active) return
+            // Burst!
+            sprite.setFillStyle(config.color, 0.8)
+            this.tweens.add({
+              targets: sprite,
+              scale: 1.5,
+              duration: 150,
+              yoyo: true,
+              onComplete: () => {
+                if (sprite.active) sprite.setFillStyle(config.color, 0.25)
+              }
+            })
+            // Check if player is in range
+            const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y)
+            if (dist < config.radius * 1.2) {
+              this.player.takeDamage(config.burstDamage)
+              this.cameras.main.shake(50, 0.003)
+            }
+          })
+          // Schedule next activation
+          this.time.delayedCall(3000 + config.warningTime + Math.random() * 2000, activateHazard)
+        }
+        this.time.delayedCall(2000 + Math.random() * 3000, activateHazard)
+      }
+    }
+  }
+
+  private checkHazardCollisions(delta: number) {
+    if (this.activeHazards.length === 0) return
+    const now = Date.now()
+
+    for (const hazard of this.activeHazards) {
+      if (!hazard.sprite.active) continue
+      const config = hazard.config
+
+      // Skip burst-only hazards (handled by timer) and poison fog (handled separately)
+      if (config.damagePerSecond <= 0 && config.slowPercent <= 0) continue
+
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hazard.x, hazard.y)
+      if (dist > config.radius) continue
+
+      // Continuous damage
+      if (config.damagePerSecond > 0 && now - hazard.lastDamageTime > 500) {
+        const damage = Math.floor(config.damagePerSecond * 0.5)
+        this.player.takeDamage(damage)
+        hazard.lastDamageTime = now
+
+        if (this.player.isDead()) this.gameOver()
+      }
+
+      // Slow effect
+      if (config.slowPercent > 0) {
+        this.player.modifierEffects.playerSpeedMult = 1 - config.slowPercent / 100
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: INTERACTABLE OBJECTS
+  // ═══════════════════════════════════════════════════════════════
+  private spawnInteractables(floorNum: number) {
+    if (floorNum < 3) return
+
+    // Health stations (1 per floor after floor 3, 2 after floor 20)
+    const healthStationCount = floorNum >= 20 ? 2 : 1
+    for (let i = 0; i < healthStationCount; i++) {
+      const x = Phaser.Math.Between(300, this.worldWidth - 300)
+      const y = Phaser.Math.Between(300, this.worldHeight - 300)
+
+      const container = this.add.container(x, y).setDepth(60)
+      const base = this.add.circle(0, 0, 20, 0x2ecc71, 0.6)
+      base.setStrokeStyle(2, 0x27ae60, 1)
+      const cross1 = this.add.rectangle(0, 0, 16, 4, 0xffffff)
+      const cross2 = this.add.rectangle(0, 0, 4, 16, 0xffffff)
+      const label = this.add.text(0, -30, 'E: HEAL', {
+        fontSize: '11px', color: '#2ecc71', fontStyle: 'bold',
+      }).setOrigin(0.5).setAlpha(0)
+      container.add([base, cross1, cross2, label])
+
+      this.healthStations.push({ sprite: container, used: false, x, y })
+    }
+
+    // Ammo crates (1-2 per floor)
+    const ammoCrateCount = floorNum >= 30 ? 2 : 1
+    for (let i = 0; i < ammoCrateCount; i++) {
+      const x = Phaser.Math.Between(300, this.worldWidth - 300)
+      const y = Phaser.Math.Between(300, this.worldHeight - 300)
+      const crate = this.add.circle(x, y, 15, 0xf39c12, 0.7)
+        .setDepth(60).setStrokeStyle(2, 0xe67e22, 1)
+      this.ammoCrates.push(crate)
+    }
+
+    // Exploding barrels (1-3 per floor after floor 10)
+    if (floorNum >= 10) {
+      const barrelCount = Math.min(3, 1 + Math.floor(floorNum / 30))
+      for (let i = 0; i < barrelCount; i++) {
+        const x = Phaser.Math.Between(300, this.worldWidth - 300)
+        const y = Phaser.Math.Between(300, this.worldHeight - 300)
+        const sprite = this.add.circle(x, y, 18, 0xe74c3c, 0.8)
+          .setDepth(60).setStrokeStyle(3, 0xc0392b, 1)
+        this.explodingBarrels.push({ sprite, x, y, health: 30 })
+      }
+    }
+  }
+
+  private checkInteractableProximity() {
+    // Health stations
+    for (const station of this.healthStations) {
+      if (station.used) continue
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, station.x, station.y)
+      const label = station.sprite.getAt(3) as Phaser.GameObjects.Text
+      if (dist < 60) {
+        label.setAlpha(1)
+        if (this.wasd && this.input.keyboard && this.input.keyboard.checkDown(this.input.keyboard.addKey('E'), 300)) {
+          station.used = true
+          this.player.heal(50)
+          this.addKillFeedMessage('+50 HP from Health Station!', '#2ecc71', 3000)
+          station.sprite.setAlpha(0.3)
+        }
+      } else {
+        label.setAlpha(0)
+      }
+    }
+
+    // Ammo crates (auto-collect)
+    for (let i = this.ammoCrates.length - 1; i >= 0; i--) {
+      const crate = this.ammoCrates[i]
+      if (!crate.active) continue
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, crate.x, crate.y)
+      if (dist < 40) {
+        this.player.addAmmo(Math.floor(this.player.maxAmmo * 0.5))
+        this.addKillFeedMessage('Ammo Crate: +50% ammo!', '#f39c12', 3000)
+        crate.destroy()
+        this.ammoCrates.splice(i, 1)
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: MINI-BOSS SPAWNING
+  // ═══════════════════════════════════════════════════════════════
+  private spawnMiniBoss(floorNum: number) {
+    const bossTypes: BossType[] = ['tank', 'speed', 'sniper', 'healer', 'mega']
+    const bossType = bossTypes[Math.floor(floorNum / 10) % bossTypes.length]
+
+    const x = Phaser.Math.Between(500, this.worldWidth - 500)
+    const y = Phaser.Math.Between(500, this.worldHeight - 500)
+
+    const miniBoss = Boss.createMiniBoss(this, x, y, bossType)
+    // Scale with floor difficulty
+    const diffMult = 1 + (floorNum / 50)
+    miniBoss.health = Math.floor(miniBoss.health * diffMult)
+    miniBoss.maxHealth = miniBoss.health
+    this.bosses.add(miniBoss)
+
+    this.addKillFeedMessage(`Mini-Boss: ${bossType.toUpperCase()} approaches!`, '#e67e22', 4000)
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: BOSS ARENA HAZARDS
+  // ═══════════════════════════════════════════════════════════════
+  private spawnBossArenaHazards(floorNum: number) {
+    // Determine boss type for this floor
+    const bossTypes: BossType[] = ['tank', 'speed', 'sniper', 'healer', 'mega',
+      'hydra', 'dragon', 'reaper', 'titan', 'phoenix',
+      'void_lord', 'mecha_overlord', 'time_weaver', 'plague_mother', 'architect']
+    const bossIndex = Math.floor(floorNum / 10) - 1
+    const bossType = bossTypes[bossIndex % bossTypes.length]
+
+    const hazardMap: Record<string, { color: number; count: number; damage: number }> = {
+      dragon: { color: 0xff4500, count: 5, damage: 20 },
+      phoenix: { color: 0xf9ca24, count: 4, damage: 15 },
+      titan: { color: 0x6c5b7b, count: 6, damage: 25 },
+      void_lord: { color: 0x2d0050, count: 4, damage: 18 },
+      plague_mother: { color: 0x27ae60, count: 5, damage: 12 },
+      inferno: { color: 0xff6600, count: 4, damage: 20 },
+    }
+
+    const hazardConfig = hazardMap[bossType]
+    if (!hazardConfig) return
+
+    for (let i = 0; i < hazardConfig.count; i++) {
+      const angle = (i / hazardConfig.count) * Math.PI * 2
+      const dist = 200 + Math.random() * 300
+      const hx = this.worldWidth / 2 + Math.cos(angle) * dist
+      const hy = this.worldHeight / 2 + Math.sin(angle) * dist
+
+      const sprite = this.add.circle(hx, hy, 50, hazardConfig.color, 0.2)
+        .setDepth(50).setStrokeStyle(2, hazardConfig.color, 0.4)
+
+      this.tweens.add({
+        targets: sprite,
+        alpha: { from: 0.15, to: 0.4 },
+        scale: { from: 0.9, to: 1.1 },
+        duration: 1500,
+        yoyo: true,
+        repeat: -1,
+      })
+
+      this.activeHazards.push({
+        sprite,
+        config: { ...HAZARD_CONFIGS.lava_zone, color: hazardConfig.color, damagePerSecond: hazardConfig.damage, radius: 50 },
+        x: hx, y: hy,
+        lastDamageTime: 0,
+        isWarning: false,
+        activationTime: 0
+      })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: BOSS LOOT EXPLOSION
+  // ═══════════════════════════════════════════════════════════════
+  private handleBossLootExplosion(detail: { x: number; y: number; count: number; guaranteedRarity: string; bossType: string; isLegendary: boolean }) {
+    const { x, y, count, guaranteedRarity, isLegendary } = detail
+
+    // Spawn items in a ring pattern
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2
+      const dist = 80 + Math.random() * 40
+      const ix = x + Math.cos(angle) * dist
+      const iy = y + Math.sin(angle) * dist
+
+      // Roll item with guaranteed minimum rarity
+      const floorNum = this.isEndlessMode ? endlessMode.getCurrentFloor() : this.floorManager.getCurrentFloorNumber()
+      let item = rollItemDrop(floorNum, 1.0) // 100% drop chance
+      if (!item) item = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
+
+      const itemDrop = new ItemDrop(this, ix, iy, item)
+      this.itemDrops.add(itemDrop)
+
+      // Scatter animation
+      itemDrop.setPosition(x, y)
+      this.tweens.add({
+        targets: itemDrop,
+        x: ix,
+        y: iy,
+        duration: 500 + Math.random() * 300,
+        ease: 'Back.easeOut',
+      })
+    }
+
+    // NEXUS UPDATE: Also roll for artifact drop from bosses
+    const artifact = rollArtifactDrop(true, isLegendary)
+    if (artifact) {
+      this.time.delayedCall(800, () => {
+        this.showArtifactDrop(x, y, artifact)
+      })
+    }
+  }
+
+  private showArtifactDrop(x: number, y: number, artifact: ArtifactDefinition) {
+    // Create special artifact drop visual
+    const artifactSprite = this.add.circle(x, y, 25, artifact.color, 0.9)
+      .setDepth(200).setStrokeStyle(4, 0xffd700, 1)
+
+    // Glow effect
+    this.tweens.add({
+      targets: artifactSprite,
+      scale: { from: 0.8, to: 1.2 },
+      alpha: { from: 0.7, to: 1 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+    })
+
+    // Label
+    const label = this.add.text(x, y - 40, `${artifact.icon} ${artifact.name}`, {
+      fontSize: '16px', fontStyle: 'bold',
+      color: artifact.rarity === ItemRarity.LEGENDARY ? '#ffd700' : '#9b59b6',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(201)
+
+    // Auto-collect when player walks over
+    const checkCollect = this.time.addEvent({
+      delay: 100,
+      loop: true,
+      callback: () => {
+        if (!artifactSprite.active) return
+        const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y)
+        if (dist < 50) {
+          const added = this.player.addArtifactToInventory(artifact)
+          if (added) {
+            if (!this.player.equippedArtifact) {
+              this.player.equipArtifact(artifact)
+            }
+            this.addKillFeedMessage(`${artifact.icon} ${artifact.name} acquired! ${artifact.description}`,
+              artifact.rarity === ItemRarity.LEGENDARY ? '#ffd700' : '#9b59b6', 6000)
+          } else {
+            this.addKillFeedMessage(`Already have ${artifact.name}`, '#95a5a6', 3000)
+          }
+          artifactSprite.destroy()
+          label.destroy()
+          checkCollect.remove()
+        }
+      }
+    })
+
+    // Despawn after 30 seconds
+    this.time.delayedCall(30000, () => {
+      if (artifactSprite.active) { artifactSprite.destroy(); label.destroy(); checkCollect.remove() }
+    })
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NEXUS UPDATE: ARTIFACT EFFECT EXECUTION
+  // ═══════════════════════════════════════════════════════════════
+  private executeArtifactEffect(effect: ArtifactEffect, x: number, y: number) {
+    switch (effect.type) {
+      case 'freeze_time':
+        this.freezeAllEnemies(effect.duration)
+        this.addKillFeedMessage('⏱️ Time Frozen!', '#74b9ff', 2000)
+        break
+
+      case 'black_hole':
+        this.createBlackHole(effect.duration, x, y)
+        break
+
+      case 'reflect_damage':
+        // Visual feedback
+        this.cameras.main.flash(100, 200, 200, 255, false)
+        break
+
+      case 'damage_multiplier':
+        this.player.activateDamageBoost(effect.duration || 5000)
+        break
+
+      case 'heal': {
+        const healAmount = Math.floor(this.player.maxHealth * effect.percent)
+        this.player.heal(healAmount)
+        break
+      }
+
+      case 'chain_lightning':
+        this.startChainLightning(1000)
+        break
+
+      case 'fire_nova': {
+        // Damage all enemies in radius
+        const enemies = this.enemies.children.entries as any[]
+        enemies.forEach((enemy: any) => {
+          if (!enemy.active) return
+          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y)
+          if (dist < effect.radius) {
+            enemy.takeDamage(effect.damage)
+          }
+        })
+        // Visual
+        const nova = this.add.circle(this.player.x, this.player.y, 30, 0xff4500, 0.6)
+        this.tweens.add({
+          targets: nova,
+          scale: effect.radius / 30,
+          alpha: 0,
+          duration: 500,
+          onComplete: () => nova.destroy()
+        })
+        break
+      }
+
+      case 'revive':
+        this.player.health = Math.floor(this.player.maxHealth * effect.healthPercent)
+        this.addKillFeedMessage('🔥 Phoenix Plume: REVIVED!', '#ff6600', 5000)
+        this.cameras.main.flash(500, 255, 150, 0, false)
+        break
+
+      case 'freeze_enemies':
+        this.freezeAllEnemies(effect.duration)
+        break
+
+      case 'damage_aura':
+        // Handled passively — damage nearby enemies
+        this.enemies.children.entries.forEach((enemy: any) => {
+          if (!enemy.active) return
+          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y)
+          if (dist < effect.radius) {
+            enemy.takeDamage(Math.floor(effect.dps * 0.5))
+          }
+        })
+        break
+
+      case 'buff_damage':
+        this.player.activateDamageBoost(effect.duration)
+        this.addKillFeedMessage(`💀 +${effect.percent}% Damage for ${effect.duration / 1000}s!`, '#8e44ad', 3000)
+        break
+
+      case 'instant_reload':
+        this.player.currentAmmo = this.player.maxAmmo * 2
+        this.addKillFeedMessage('⚛️ Quantum Reload: Double Magazine!', '#6c5ce7', 3000)
+        break
+
+      case 'teleport_behind':
+        // Teleport behind nearest enemy
+        const nearest = this.getNearestEnemy()
+        if (nearest) {
+          const behindAngle = Phaser.Math.Angle.Between(nearest.x, nearest.y, this.player.x, this.player.y)
+          this.player.setPosition(
+            nearest.x + Math.cos(behindAngle) * -60,
+            nearest.y + Math.sin(behindAngle) * -60
+          )
+        }
+        break
+
+      case 'stun_boss':
+        // Stun all active bosses
+        this.bosses.children.entries.forEach((boss: any) => {
+          if (boss.active) {
+            boss.setVelocity(0, 0)
+            boss.setTint(0xffffff)
+            this.time.delayedCall(effect.duration, () => { if (boss.active) boss.clearTint() })
+          }
+        })
+        break
+    }
+  }
+
   // ═══════════════════════════════════════
   // INVENTORY / GEAR UI (I key)
   // ═══════════════════════════════════════
@@ -5643,6 +6739,1056 @@ export default class GameSceneV3 extends Phaser.Scene {
       }
     }
 
+    // ─── ARTIFACTS ───
+    curY += 16
+    curY = Math.min(curY, cy + ph / 2 - 60)
+    const artifactLabel = this.add.text(leftX, curY, 'ARTIFACTS', {
+      fontSize: '16px', fontStyle: 'bold', color: '#ffd700',
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+    uiElements.push(artifactLabel)
+    curY += 28
+
+    // Equipped artifact
+    if (this.player.equippedArtifact) {
+      const a = this.player.equippedArtifact
+      const eqColor = a.rarity === ItemRarity.LEGENDARY ? '#ffd700' : '#9b59b6'
+      const eqText = this.add.text(leftX + 10, curY, `EQUIPPED: ${a.icon} ${a.name}`, {
+        fontSize: '14px', fontStyle: 'bold', color: eqColor,
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(eqText)
+      curY += 18
+      const eqDesc = this.add.text(leftX + 20, curY, a.description, {
+        fontSize: '11px', color: '#88c0d0',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(eqDesc)
+      curY += 20
+
+      // Unequip button
+      const unequipBtn = this.add.text(leftX + 20, curY, '[Unequip]', {
+        fontSize: '12px', color: '#e74c3c',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+      unequipBtn.on('pointerdown', () => {
+        this.player.unequipArtifact()
+        this.closeInventory()
+        this.openInventory()
+      })
+      uiElements.push(unequipBtn)
+      curY += 22
+    } else {
+      const noArt = this.add.text(leftX + 10, curY, 'No artifact equipped. Kill bosses to find artifacts!', {
+        fontSize: '13px', color: '#7f8c8d',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(noArt)
+      curY += 22
+    }
+
+    // Artifact inventory
+    if (this.player.artifactInventory.length > 0) {
+      const invLabel = this.add.text(leftX + 10, curY, 'Inventory:', {
+        fontSize: '12px', color: '#88c0d0',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(invLabel)
+      curY += 18
+
+      for (const a of this.player.artifactInventory) {
+        const aColor = a.rarity === ItemRarity.LEGENDARY ? '#ffd700' : '#9b59b6'
+        const aText = this.add.text(leftX + 20, curY, `${a.icon} ${a.name} - ${a.description}`, {
+          fontSize: '11px', color: aColor,
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+        aText.on('pointerdown', () => {
+          this.player.equipArtifact(a)
+          this.closeInventory()
+          this.openInventory()
+        })
+        aText.on('pointerover', () => aText.setColor('#ffffff'))
+        aText.on('pointerout', () => aText.setColor(aColor))
+        uiElements.push(aText)
+        curY += 16
+      }
+    }
+
+    // ─── EVOLUTION UPDATE: CRAFTING MATERIALS ───
+    curY += 16
+    curY = Math.min(curY, cy + ph / 2 - 40)
+    const craftLabel = this.add.text(leftX, curY, 'CRAFTING MATERIALS', {
+      fontSize: '16px', fontStyle: 'bold', color: '#ff6600',
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+    uiElements.push(craftLabel)
+    curY += 24
+
+    try {
+      const mats = craftingSystem.getMaterials()
+      const shardText = `🔥${mats.shards.fire} ❄️${mats.shards.ice} ⚡${mats.shards.lightning} 🌀${mats.shards.void}  Dust: ${mats.dust}`
+      const shardDisplay = this.add.text(leftX + 10, curY, shardText, {
+        fontSize: '12px', color: '#88c0d0',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(shardDisplay)
+      curY += 18
+
+      const gems = craftingSystem.getGems()
+      const gemEntries = Object.entries(gems).filter(([, v]) => v > 0)
+      if (gemEntries.length > 0) {
+        const gemText = gemEntries.map(([id, count]) => {
+          const def = GEM_DEFINITIONS.find(g => g.id === id)
+          return `${def?.name || id}: ${count}`
+        }).join(', ')
+        const gemDisplay = this.add.text(leftX + 10, curY, `Gems: ${gemText}`, {
+          fontSize: '11px', color: '#88c0d0',
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(gemDisplay)
+      }
+    } catch (e) { /* ignore */ }
+
     this.inventoryUI = uiElements
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONVERGENCE UPDATE: Companion System
+  // ═══════════════════════════════════════════════════════════════
+
+  private createCompanionVisual() {
+    const compDef = companionSystem.getActiveCompanionDef()
+    if (!compDef) return
+
+    this.companionVisual = this.add.circle(this.player.x, this.player.y, 10, compDef.color)
+    this.companionVisual.setDepth(90)
+    this.companionVisual.setAlpha(0.9)
+    // Add a small glow effect
+    this.companionVisual.setStrokeStyle(2, compDef.color, 0.5)
+  }
+
+  private updateCompanion(time: number, delta: number) {
+    if (!this.companionVisual || !companionSystem.getActiveCompanion()) return
+
+    const compType = companionSystem.getActiveCompanion()!
+    const compDef = companionSystem.getActiveCompanionDef()!
+
+    // Orbit around player
+    this.companionOrbitAngle += delta * 0.003
+    const orbitRadius = 80
+    const targetX = this.player.x + Math.cos(this.companionOrbitAngle) * orbitRadius
+    const targetY = this.player.y + Math.sin(this.companionOrbitAngle) * orbitRadius
+    this.companionVisual.x = targetX
+    this.companionVisual.y = targetY
+
+    // Type-specific AI behaviors
+    switch (compType) {
+      case 'attack_drone':
+        this.updateAttackDrone(time)
+        break
+      case 'shield_bot':
+        this.updateShieldBot(time)
+        break
+      case 'heal_sprite':
+        this.updateHealSprite(time)
+        break
+      case 'loot_magnet':
+        this.updateLootMagnet(delta)
+        break
+    }
+  }
+
+  private updateAttackDrone(time: number) {
+    const level = companionSystem.getLevel('attack_drone')
+    let fireInterval = 800 - level * 10 // Gets faster with level
+    // Level 30 ability: Overclock permanent +50% fire rate
+    if (level >= 30) fireInterval *= 0.5
+
+    if (time - this.companionLastAttackTime < fireInterval) return
+
+    const nearest = this.getNearestEnemy()
+    if (!nearest) return
+
+    const dist = Phaser.Math.Distance.Between(this.companionVisual!.x, this.companionVisual!.y, nearest.x, nearest.y)
+    if (dist > 400) return
+
+    this.companionLastAttackTime = time
+    const damage = companionSystem.getEffectiveValue('attack_drone')
+
+    // Create a bullet visual
+    const angle = Phaser.Math.Angle.Between(this.companionVisual!.x, this.companionVisual!.y, nearest.x, nearest.y)
+    const bullet = this.add.circle(this.companionVisual!.x, this.companionVisual!.y, 3, 0xff4444)
+    bullet.setDepth(85)
+
+    this.tweens.add({
+      targets: bullet,
+      x: nearest.x,
+      y: nearest.y,
+      duration: 200,
+      onComplete: () => {
+        bullet.destroy()
+        if (nearest.active) {
+          const killed = nearest.takeDamage(damage)
+          if (killed) {
+            this.enemiesKilled++
+            this.runStats.totalKills++
+            this.createExplosion(nearest.x, nearest.y, false)
+            nearest.destroy()
+          }
+        }
+      }
+    })
+  }
+
+  private updateShieldBot(time: number) {
+    if (!this.companionShieldReady && time > this.companionShieldCooldownEnd) {
+      this.companionShieldReady = true
+      // Visual indicator
+      if (this.companionVisual) {
+        this.companionVisual.setStrokeStyle(3, 0x4444ff, 0.8)
+      }
+    }
+  }
+
+  // Call this from damage handling to check shield block
+  private tryCompanionShieldBlock(): boolean {
+    if (!companionSystem.getActiveCompanion() || companionSystem.getActiveCompanion() !== 'shield_bot') return false
+    if (!this.companionShieldReady) return false
+
+    const level = companionSystem.getLevel('shield_bot')
+    const cooldown = companionSystem.getEffectiveValue('shield_bot') // decreases with level
+    const blocksAvailable = level >= 30 ? 3 : 1
+
+    this.companionShieldReady = false
+    this.companionShieldCooldownEnd = this.time.now + Math.max(3000, cooldown)
+
+    if (this.companionVisual) {
+      this.companionVisual.setStrokeStyle(1, 0x4444ff, 0.3)
+      // Shield flash effect
+      this.cameras.main.flash(200, 68, 68, 255, false)
+    }
+
+    this.addKillFeedMessage('🛡️ Shield Bot blocked an attack!', '#4444ff', 2000)
+    return true
+  }
+
+  private updateHealSprite(time: number) {
+    if (time - this.companionLastHealTick < 1000) return
+    this.companionLastHealTick = time
+
+    const healPerSec = companionSystem.getEffectiveValue('heal_sprite')
+    if (this.player.health < this.player.maxHealth) {
+      this.player.heal(healPerSec)
+    }
+  }
+
+  private updateLootMagnet(delta: number) {
+    const radius = companionSystem.getEffectiveValue('loot_magnet')
+
+    // Pull item drops toward player
+    this.itemDrops.children.entries.forEach((item: any) => {
+      if (!item.active) return
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, item.x, item.y)
+      if (dist < radius && dist > 10) {
+        const angle = Phaser.Math.Angle.Between(item.x, item.y, this.player.x, this.player.y)
+        const pullSpeed = 300 * (1 - dist / radius)
+        item.x += Math.cos(angle) * pullSpeed * (delta / 1000)
+        item.y += Math.sin(angle) * pullSpeed * (delta / 1000)
+      }
+    })
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONVERGENCE UPDATE: Elemental Effects
+  // ═══════════════════════════════════════════════════════════════
+
+  private applyElementalEffect(enemy: any, config: { dotDPS?: number, dotDuration?: number, slowPercent?: number, slowDuration?: number, chainChance?: number, chainRange?: number, hpPercent?: number, color: number, type: string }) {
+    const now = this.time.now
+
+    // Fire DOT
+    if (config.dotDPS && config.dotDuration) {
+      this.enemyDOTs.set(enemy, {
+        element: 'fire',
+        dps: config.dotDPS,
+        endTime: now + config.dotDuration * 1000,
+        lastTick: now
+      })
+      enemy.setTint?.(0xff6600)
+      this.audioManager.playSound('elementalFire')
+    }
+
+    // Ice slow
+    if (config.slowPercent && config.slowDuration) {
+      this.enemySlows.set(enemy, {
+        percent: config.slowPercent / 100,
+        endTime: now + config.slowDuration * 1000
+      })
+      enemy.setTint?.(0x00ccff)
+      if (enemy.speed) {
+        enemy.speed *= (1 - config.slowPercent / 100)
+      }
+      this.audioManager.playSound('elementalIce')
+    }
+
+    // Lightning chain
+    if (config.chainChance && config.chainRange && Math.random() < config.chainChance) {
+      this.chainLightning(enemy, config.chainRange)
+      this.audioManager.playSound('elementalLightning')
+    }
+
+    // Void effect (damage applied in bulletHitEnemy)
+    if (config.hpPercent) {
+      this.audioManager.playSound('elementalVoid')
+      // Purple flash on enemy
+      if (enemy.active) {
+        enemy.setTint?.(0x9900ff)
+        this.time.delayedCall(200, () => {
+          if (enemy.active) enemy.clearTint?.()
+        })
+      }
+    }
+  }
+
+  private chainLightning(source: any, range: number) {
+    // Find nearest enemy to source (excluding source)
+    let nearest: any = null
+    let nearestDist = Infinity
+
+    this.enemies.children.entries.forEach((enemy: any) => {
+      if (!enemy.active || enemy === source) return
+      const dist = Phaser.Math.Distance.Between(source.x, source.y, enemy.x, enemy.y)
+      if (dist < range && dist < nearestDist) {
+        nearestDist = dist
+        nearest = enemy
+      }
+    })
+
+    if (!nearest) return
+
+    // Visual chain arc
+    const line = this.add.line(0, 0, source.x, source.y, nearest.x, nearest.y, 0xffff00, 0.8)
+    line.setLineWidth(2).setDepth(100)
+    this.time.delayedCall(150, () => line.destroy())
+
+    // Chain damage (50% of original)
+    const chainDamage = Math.floor(this.player.getCurrentWeaponDamage() * 0.5)
+    const killed = nearest.takeDamage(chainDamage)
+    if (killed) {
+      this.enemiesKilled++
+      this.runStats.totalKills++
+      this.createExplosion(nearest.x, nearest.y, false)
+      nearest.destroy()
+    }
+  }
+
+  private processElementalEffects(time: number, _delta: number) {
+    // Process DOTs
+    const dotsToRemove: any[] = []
+    this.enemyDOTs.forEach((dot, enemy) => {
+      if (!enemy.active || time > dot.endTime) {
+        dotsToRemove.push(enemy)
+        if (enemy.active) enemy.clearTint?.()
+        return
+      }
+      if (time - dot.lastTick >= 1000) {
+        dot.lastTick = time
+        const killed = enemy.takeDamage(dot.dps)
+        if (killed) {
+          dotsToRemove.push(enemy)
+          this.enemiesKilled++
+          this.runStats.totalKills++
+          this.createExplosion(enemy.x, enemy.y, false)
+          enemy.destroy()
+        }
+      }
+    })
+    dotsToRemove.forEach(e => this.enemyDOTs.delete(e))
+
+    // Process slow expiry
+    const slowsToRemove: any[] = []
+    this.enemySlows.forEach((slow, enemy) => {
+      if (!enemy.active || time > slow.endTime) {
+        slowsToRemove.push(enemy)
+        if (enemy.active) {
+          enemy.clearTint?.()
+          if (enemy.speed) enemy.speed /= (1 - slow.percent)
+        }
+      }
+    })
+    slowsToRemove.forEach(e => this.enemySlows.delete(e))
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONVERGENCE UPDATE: Elemental Core Drops
+  // ═══════════════════════════════════════════════════════════════
+
+  private tryDropElementalCore(x: number, y: number, isBoss: boolean) {
+    const dropChance = isBoss ? 0.15 : 0.05
+    // Apply NG+ loot quality multiplier
+    const ngMods = prestigeSystem.getNGPlusModifiers()
+    const adjustedChance = dropChance * ngMods.lootQualityMult
+
+    if (Math.random() > adjustedChance) return
+
+    // Get element based on current floor theme
+    const floorNum = this.floorManager.getCurrentFloorNumber()
+    const theme = getThemeForFloor(floorNum)
+    const element = elementalSystem.getElementForTheme(theme?.name || 'arena')
+    const config = ELEMENT_CONFIGS[element]
+
+    elementalSystem.addCore(element)
+
+    // Visual notification
+    const corePickup = this.add.circle(x, y, 8, config.color)
+    corePickup.setDepth(100).setAlpha(0.9)
+    corePickup.setStrokeStyle(2, 0xffffff, 0.5)
+
+    this.tweens.add({
+      targets: corePickup,
+      y: y - 40,
+      alpha: 0,
+      scale: 0.3,
+      duration: 1000,
+      onComplete: () => corePickup.destroy()
+    })
+
+    this.addKillFeedMessage(`💎 ${config.name} Core collected!`, `#${config.color.toString(16).padStart(6, '0')}`, 3000)
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EVOLUTION UPDATE: Floor Events & NPCs
+  // ═══════════════════════════════════════════════════════════════
+
+  private triggerFloorEvent(event: FloorEventConfig, floorNum: number) {
+    // Clear any previous event elements
+    this.floorEventElements.forEach(e => e.destroy())
+    this.floorEventElements = []
+
+    this.addKillFeedMessage(`${event.icon} ${event.name}!`, '#ffd700', 4000)
+
+    switch (event.type) {
+      case 'treasure_goblin':
+        this.spawnTreasureGoblin(floorNum)
+        break
+      case 'elite_ambush':
+        this.spawnEliteAmbush(floorNum)
+        break
+      case 'shop_caravan':
+        this.showShopCaravan(floorNum)
+        break
+      case 'blessing_shrine':
+        this.showBlessingChoice()
+        break
+      case 'cursed_chest':
+        this.showCursedChestPrompt()
+        break
+    }
+  }
+
+  private spawnTreasureGoblin(floorNum: number) {
+    const x = Phaser.Math.Between(300, this.worldWidth - 300)
+    const y = Phaser.Math.Between(300, this.worldHeight - 300)
+
+    this.treasureGoblin = this.add.circle(x, y, 16, 0xffd700).setDepth(100)
+    this.treasureGoblin.setStrokeStyle(3, 0xff6600)
+
+    // Move goblin randomly and fast
+    const moveGoblin = () => {
+      if (!this.treasureGoblin || !this.treasureGoblin.active) return
+      const tx = Phaser.Math.Between(200, this.worldWidth - 200)
+      const ty = Phaser.Math.Between(200, this.worldHeight - 200)
+      this.tweens.add({
+        targets: this.treasureGoblin,
+        x: tx, y: ty,
+        duration: 1500,
+        ease: 'Sine.easeInOut',
+        onComplete: () => moveGoblin(),
+      })
+    }
+    moveGoblin()
+    this.floorEventElements.push(this.treasureGoblin)
+
+    // Label
+    const label = this.add.text(x, y - 25, '💰 TREASURE GOBLIN', {
+      fontSize: '14px', color: '#ffd700', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(101)
+    this.floorEventElements.push(label)
+
+    // Timer: 10 seconds to kill
+    this.treasureGoblinTimer = this.time.delayedCall(10000, () => {
+      if (this.treasureGoblin?.active) {
+        this.addKillFeedMessage('💰 Treasure Goblin escaped!', '#ff6600', 3000)
+        this.treasureGoblin.destroy()
+        label.destroy()
+      }
+    })
+
+    // Make clickable for bonus reward
+    this.treasureGoblin.setInteractive()
+    this.treasureGoblin.on('pointerdown', () => {
+      // Check if player is close enough
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.treasureGoblin!.x, this.treasureGoblin!.y)
+      if (dist < 200) {
+        const goldReward = 500 + floorNum * 20
+        this.player.addMoney(goldReward)
+        this.addKillFeedMessage(`💰 Goblin caught! +$${goldReward}`, '#ffd700', 4000)
+        this.visualEffects?.createItemPickupEffect(this.treasureGoblin!.x, this.treasureGoblin!.y, 'legendary')
+        this.audioManager.playSound('upgrade')
+        this.treasureGoblin!.destroy()
+        label.destroy()
+        if (this.treasureGoblinTimer) this.treasureGoblinTimer.remove()
+      }
+    })
+  }
+
+  private spawnEliteAmbush(floorNum: number) {
+    const count = 5 + Math.floor(floorNum / 15)
+    const eliteTypes = [EnemyType.BERSERKER, EnemyType.ASSASSIN, EnemyType.SHIELDER, EnemyType.VAMPIRE]
+
+    this.addKillFeedMessage(`⚔️ ${count} Elite enemies incoming!`, '#ff0000', 3000)
+
+    for (let i = 0; i < count; i++) {
+      const x = this.player.x + Phaser.Math.Between(-400, 400)
+      const y = this.player.y + Phaser.Math.Between(-400, 400)
+      const type = Phaser.Math.RND.pick(eliteTypes)
+      const enemy = new AdvancedEnemy(this, x, y, type)
+      enemy.health *= 1.5
+      enemy.maxHealth = enemy.health
+      enemy.setTint(0xff6600) // Mark as elite
+      this.enemies.add(enemy)
+    }
+  }
+
+  private showShopCaravan(floorNum: number) {
+    const sw = this.scale.width
+    const sh = this.scale.height
+    const cx = sw / 2
+    const cy = sh / 2
+    const uiElements: Phaser.GameObjects.GameObject[] = []
+
+    const overlay = this.add.rectangle(cx, cy, sw * 2, sh * 2, 0x000000, 0.6)
+      .setScrollFactor(0).setDepth(8000)
+    uiElements.push(overlay)
+
+    const panel = this.add.rectangle(cx, cy, 400, 300, 0x0d1b2a, 0.95)
+      .setScrollFactor(0).setDepth(8001).setStrokeStyle(2, 0xffd700)
+    uiElements.push(panel)
+
+    const title = this.add.text(cx, cy - 120, '🏪 SHOP CARAVAN', {
+      fontSize: '24px', fontStyle: 'bold', color: '#ffd700', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(title)
+
+    // Generate 3 random rare+ items
+    const rareItems = ITEM_POOL.filter(i =>
+      i.rarity === ItemRarity.RARE || i.rarity === ItemRarity.EPIC || i.rarity === ItemRarity.LEGENDARY
+    )
+    const shuffled = [...rareItems].sort(() => Math.random() - 0.5).slice(0, 3)
+
+    let yOff = cy - 60
+    for (const item of shuffled) {
+      const cost = item.rarity === ItemRarity.LEGENDARY ? 800 : item.rarity === ItemRarity.EPIC ? 500 : 300
+      const rarityColor: Record<string, string> = { rare: '#3498db', epic: '#9b59b6', legendary: '#ffd700' }
+      const color = rarityColor[item.rarity] || '#ffffff'
+
+      const btn = this.add.text(cx, yOff, `${item.name} (${item.rarity}) - $${cost}`, {
+        fontSize: '16px', color, fontStyle: 'bold', stroke: '#000', strokeThickness: 2,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+      btn.on('pointerover', () => btn.setColor('#ffffff'))
+      btn.on('pointerout', () => btn.setColor(color))
+      btn.on('pointerdown', () => {
+        if (this.player.money >= cost) {
+          this.player.addMoney(-cost)
+          item.effect(this.player)
+          this.addKillFeedMessage(`Bought ${item.name}!`, color, 3000)
+          this.audioManager.playSound('purchase')
+          btn.setColor('#555555')
+          btn.removeInteractive()
+        } else {
+          this.addKillFeedMessage('Not enough gold!', '#ff0000', 2000)
+        }
+      })
+      uiElements.push(btn)
+      yOff += 40
+    }
+
+    const closeBtn = this.add.text(cx, cy + 120, '[CLOSE]', {
+      fontSize: '18px', color: '#88c0d0',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+    closeBtn.on('pointerdown', () => {
+      uiElements.forEach(e => e.destroy())
+    })
+    uiElements.push(closeBtn)
+  }
+
+  private showBlessingChoice() {
+    const blessings = eventSystem.getRandomBlessings()
+    const sw = this.scale.width
+    const sh = this.scale.height
+    const cx = sw / 2
+    const cy = sh / 2
+    const uiElements: Phaser.GameObjects.GameObject[] = []
+
+    this.physics.pause()
+
+    const overlay = this.add.rectangle(cx, cy, sw * 2, sh * 2, 0x000000, 0.6)
+      .setScrollFactor(0).setDepth(8000)
+    uiElements.push(overlay)
+
+    const panel = this.add.rectangle(cx, cy, 450, 350, 0x0d1b2a, 0.95)
+      .setScrollFactor(0).setDepth(8001).setStrokeStyle(2, 0x00d9ff)
+    uiElements.push(panel)
+
+    const title = this.add.text(cx, cy - 140, '✨ BLESSING SHRINE', {
+      fontSize: '24px', fontStyle: 'bold', color: '#00d9ff', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(title)
+
+    const subtitle = this.add.text(cx, cy - 110, 'Choose one blessing (lasts 5 floors)', {
+      fontSize: '14px', color: '#88c0d0',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(subtitle)
+
+    let yOff = cy - 60
+    for (const b of blessings) {
+      const colorStr = `#${b.color.toString(16).padStart(6, '0')}`
+      const btn = this.add.text(cx, yOff, `${b.icon} ${b.name}`, {
+        fontSize: '20px', fontStyle: 'bold', color: colorStr, stroke: '#000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+
+      const desc = this.add.text(cx, yOff + 24, b.description, {
+        fontSize: '13px', color: '#88c0d0',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+      uiElements.push(desc)
+
+      btn.on('pointerover', () => btn.setScale(1.1))
+      btn.on('pointerout', () => btn.setScale(1))
+      btn.on('pointerdown', () => {
+        eventSystem.activateBlessing(b.id)
+        this.addKillFeedMessage(`${b.icon} ${b.name} activated!`, colorStr, 4000)
+        this.audioManager.playSound('upgrade')
+        uiElements.forEach(e => e.destroy())
+        this.physics.resume()
+      })
+      uiElements.push(btn)
+      yOff += 65
+    }
+  }
+
+  private showCursedChestPrompt() {
+    const curse = eventSystem.getRandomCursedPair()
+    const sw = this.scale.width
+    const sh = this.scale.height
+    const cx = sw / 2
+    const cy = sh / 2
+    const uiElements: Phaser.GameObjects.GameObject[] = []
+
+    this.physics.pause()
+
+    const overlay = this.add.rectangle(cx, cy, sw * 2, sh * 2, 0x000000, 0.6)
+      .setScrollFactor(0).setDepth(8000)
+    uiElements.push(overlay)
+
+    const panel = this.add.rectangle(cx, cy, 420, 280, 0x0d1b2a, 0.95)
+      .setScrollFactor(0).setDepth(8001).setStrokeStyle(2, 0xff0000)
+    uiElements.push(panel)
+
+    const title = this.add.text(cx, cy - 110, '💀 CURSED CHEST', {
+      fontSize: '24px', fontStyle: 'bold', color: '#ff0000', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(title)
+
+    const buffText = this.add.text(cx, cy - 50, `✅ ${curse.buffName}: ${curse.buffDescription}`, {
+      fontSize: '16px', color: '#2ecc71', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(buffText)
+
+    const curseText = this.add.text(cx, cy - 20, `❌ ${curse.curseName}: ${curse.curseDescription}`, {
+      fontSize: '16px', color: '#e74c3c', stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(curseText)
+
+    const durationText = this.add.text(cx, cy + 15, 'Lasts 5 floors', {
+      fontSize: '13px', color: '#88c0d0',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(durationText)
+
+    const acceptBtn = this.add.text(cx - 80, cy + 70, 'ACCEPT', {
+      fontSize: '20px', fontStyle: 'bold', color: '#2ecc71', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+    acceptBtn.on('pointerdown', () => {
+      eventSystem.acceptCurse(curse.id)
+      this.addKillFeedMessage(`💀 ${curse.buffName} + ${curse.curseName}!`, '#ff6600', 4000)
+      uiElements.forEach(e => e.destroy())
+      this.physics.resume()
+    })
+    uiElements.push(acceptBtn)
+
+    const declineBtn = this.add.text(cx + 80, cy + 70, 'DECLINE', {
+      fontSize: '20px', fontStyle: 'bold', color: '#e74c3c', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+    declineBtn.on('pointerdown', () => {
+      uiElements.forEach(e => e.destroy())
+      this.physics.resume()
+    })
+    uiElements.push(declineBtn)
+  }
+
+  private spawnNPCEncounter(npcType: NPCType, floorNum: number) {
+    const config = NPC_CONFIGS[npcType]
+    const x = Phaser.Math.Between(400, this.worldWidth - 400)
+    const y = Phaser.Math.Between(400, this.worldHeight - 400)
+
+    // NPC visual
+    const npc = this.add.circle(x, y, 20, config.color).setDepth(100)
+    npc.setStrokeStyle(3, 0xffffff)
+    npc.setInteractive({ useHandCursor: true })
+    this.npcElements.push(npc)
+
+    const label = this.add.text(x, y - 35, `${config.icon} ${config.name}`, {
+      fontSize: '14px', fontStyle: 'bold', color: '#ffffff', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(101)
+    this.npcElements.push(label)
+
+    const prompt = this.add.text(x, y + 30, '[Click to interact]', {
+      fontSize: '11px', color: '#88c0d0',
+    }).setOrigin(0.5).setDepth(101)
+    this.npcElements.push(prompt)
+
+    npc.on('pointerdown', () => {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y)
+      if (dist > 250) {
+        this.addKillFeedMessage('Get closer to interact!', '#ff6600', 2000)
+        return
+      }
+      eventSystem.recordNPCVisit()
+      this.showNPCDialogue(npcType, floorNum)
+    })
+  }
+
+  private showNPCDialogue(npcType: NPCType, floorNum: number) {
+    const config = NPC_CONFIGS[npcType]
+    const sw = this.scale.width
+    const sh = this.scale.height
+    const cx = sw / 2
+    const cy = sh / 2
+    const uiElements: Phaser.GameObjects.GameObject[] = []
+
+    this.physics.pause()
+
+    const overlay = this.add.rectangle(cx, cy, sw * 2, sh * 2, 0x000000, 0.6)
+      .setScrollFactor(0).setDepth(8000)
+    uiElements.push(overlay)
+
+    const panel = this.add.rectangle(cx, cy, 420, 300, 0x0d1b2a, 0.95)
+      .setScrollFactor(0).setDepth(8001).setStrokeStyle(2, config.color)
+    uiElements.push(panel)
+
+    const title = this.add.text(cx, cy - 120, `${config.icon} ${config.name}`, {
+      fontSize: '22px', fontStyle: 'bold', color: `#${config.color.toString(16).padStart(6, '0')}`, stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(title)
+
+    switch (npcType) {
+      case 'blacksmith': {
+        const repairCost = 50 + floorNum * 5
+        const repairBtn = this.add.text(cx, cy - 40, `🔧 Repair Weapon (Full Ammo) - $${repairCost}`, {
+          fontSize: '16px', color: '#2ecc71', stroke: '#000', strokeThickness: 2,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+        repairBtn.on('pointerdown', () => {
+          if (this.player.money >= repairCost) {
+            this.player.addMoney(-repairCost)
+            this.player.reload()
+            this.addKillFeedMessage('🔧 Weapon repaired!', '#2ecc71', 3000)
+          } else {
+            this.addKillFeedMessage('Not enough gold!', '#ff0000', 2000)
+          }
+        })
+        uiElements.push(repairBtn)
+
+        const upgradeCost = 200 + floorNum * 10
+        const upgradeBtn = this.add.text(cx, cy + 10, `⬆️ Upgrade Weapon (+5% damage) - $${upgradeCost}`, {
+          fontSize: '16px', color: '#f39c12', stroke: '#000', strokeThickness: 2,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+        upgradeBtn.on('pointerdown', () => {
+          if (this.player.money >= upgradeCost) {
+            this.player.addMoney(-upgradeCost)
+            this.player.shopDamageBonus += 5
+            this.addKillFeedMessage('⬆️ Weapon upgraded! +5% damage', '#f39c12', 3000)
+          } else {
+            this.addKillFeedMessage('Not enough gold!', '#ff0000', 2000)
+          }
+        })
+        uiElements.push(upgradeBtn)
+        break
+      }
+      case 'oracle': {
+        // Preview next 3 floors
+        const currentFloor = this.floorManager.getCurrentFloorNumber()
+        let previewY = cy - 50
+        for (let i = 1; i <= 3; i++) {
+          const futureFloor = currentFloor + i
+          const theme = getThemeForFloor(futureFloor)
+          const isBoss = futureFloor % 10 === 0
+          const info = `Floor ${futureFloor}: ${theme?.name || 'Unknown'}${isBoss ? ' [BOSS]' : ''}`
+          const previewText = this.add.text(cx, previewY, info, {
+            fontSize: '16px', color: isBoss ? '#ff0000' : '#88c0d0', stroke: '#000', strokeThickness: 2,
+          }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+          uiElements.push(previewText)
+          previewY += 30
+        }
+        break
+      }
+      case 'bounty_hunter': {
+        const enemyTypes = ['grunt', 'scout', 'tank', 'sniper', 'berserker', 'assassin']
+        const bounty = eventSystem.generateBounty(floorNum, enemyTypes)
+        const bountyText = this.add.text(cx, cy - 40, `Kill ${bounty.targetCount} ${bounty.targetType}s in ${bounty.floorsRemaining} floors`, {
+          fontSize: '16px', color: '#f39c12', stroke: '#000', strokeThickness: 2,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+        uiElements.push(bountyText)
+        const rewardText = this.add.text(cx, cy, `Reward: $${bounty.goldReward} + ${bounty.materialReward.amount} ${bounty.materialReward.type}s`, {
+          fontSize: '14px', color: '#2ecc71',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+        uiElements.push(rewardText)
+        const acceptBtn = this.add.text(cx, cy + 50, '[ACCEPT BOUNTY]', {
+          fontSize: '18px', fontStyle: 'bold', color: '#ffd700', stroke: '#000', strokeThickness: 3,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+        acceptBtn.on('pointerdown', () => {
+          eventSystem.acceptBounty(bounty)
+          this.addKillFeedMessage(`🎯 Bounty accepted: Kill ${bounty.targetCount} ${bounty.targetType}s!`, '#ffd700', 5000)
+          uiElements.forEach(e => e.destroy())
+          this.physics.resume()
+        })
+        uiElements.push(acceptBtn)
+        break
+      }
+      default: {
+        const desc = this.add.text(cx, cy - 20, config.description, {
+          fontSize: '16px', color: '#88c0d0',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+        uiElements.push(desc)
+        break
+      }
+    }
+
+    const closeBtn = this.add.text(cx, cy + 120, '[CLOSE]', {
+      fontSize: '18px', color: '#88c0d0',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002).setInteractive({ useHandCursor: true })
+    closeBtn.on('pointerdown', () => {
+      uiElements.forEach(e => e.destroy())
+      this.physics.resume()
+    })
+    uiElements.push(closeBtn)
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EVOLUTION UPDATE: Kill Streak Announcements
+  // ═══════════════════════════════════════════════════════════════
+
+  private showKillStreakAnnouncement(streak: number) {
+    const milestones: Record<number, { text: string; color: string; size: string }> = {
+      2: { text: 'DOUBLE KILL', color: '#2ecc71', size: '28px' },
+      3: { text: 'TRIPLE KILL', color: '#3498db', size: '32px' },
+      5: { text: 'RAMPAGE', color: '#9b59b6', size: '36px' },
+      8: { text: 'DOMINATING', color: '#e74c3c', size: '40px' },
+      10: { text: 'UNSTOPPABLE', color: '#ff6600', size: '44px' },
+      15: { text: 'GODLIKE', color: '#ff0000', size: '48px' },
+      20: { text: 'LEGENDARY', color: '#ffd700', size: '52px' },
+    }
+
+    const milestone = milestones[streak]
+    if (!milestone) return
+
+    const sw = this.scale.width
+    const sh = this.scale.height
+
+    const text = this.add.text(sw / 2, sh / 3, milestone.text, {
+      fontSize: milestone.size,
+      fontStyle: 'bold',
+      color: milestone.color,
+      stroke: '#000000',
+      strokeThickness: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8000).setScale(0)
+
+    this.tweens.add({
+      targets: text,
+      scale: 1.3,
+      duration: 200,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          scale: 1,
+          alpha: 0,
+          y: text.y - 50,
+          duration: 1200,
+          ease: 'Cubic.easeOut',
+          onComplete: () => text.destroy(),
+        })
+      },
+    })
+
+    // Screen effects for higher streaks
+    if (streak >= 5) {
+      this.visualEffects?.screenFlash(parseInt(milestone.color.replace('#', '0x')), 0.2, 150)
+    }
+    if (streak >= 10) {
+      this.visualEffects?.shakeScreen('medium')
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EVOLUTION UPDATE: Boss Intro Sequence
+  // ═══════════════════════════════════════════════════════════════
+
+  private showBossIntro(bossConfig: any) {
+    const sw = this.scale.width
+    const sh = this.scale.height
+
+    // Pause physics briefly
+    this.physics.pause()
+
+    // Dark vignette
+    const vignette = this.add.rectangle(sw / 2, sh / 2, sw * 2, sh * 2, 0x000000, 0)
+      .setScrollFactor(0).setDepth(9990)
+
+    this.tweens.add({
+      targets: vignette,
+      fillAlpha: 0.7,
+      duration: 300,
+      yoyo: true,
+      hold: 1200,
+      ease: 'Cubic.easeInOut',
+      onComplete: () => vignette.destroy(),
+    })
+
+    // Camera zoom
+    this.cameras.main.zoomTo(1.3, 300)
+    this.time.delayedCall(1500, () => {
+      this.cameras.main.zoomTo(1, 300)
+    })
+
+    // Boss name card
+    const nameCard = this.add.text(sw / 2, sh / 2 - 30, bossConfig.name || 'BOSS', {
+      fontSize: '56px', fontStyle: 'bold', color: '#ff6600',
+      stroke: '#000', strokeThickness: 8,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9991).setAlpha(0).setScale(0.5)
+
+    this.tweens.add({
+      targets: nameCard,
+      alpha: 1,
+      scale: 1.2,
+      duration: 400,
+      delay: 200,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.time.delayedCall(800, () => {
+          this.tweens.add({
+            targets: nameCard,
+            alpha: 0,
+            scale: 1.5,
+            duration: 300,
+            onComplete: () => nameCard.destroy(),
+          })
+        })
+      },
+    })
+
+    // Ability text
+    const abilityText = this.add.text(sw / 2, sh / 2 + 30, bossConfig.specialAbility || '', {
+      fontSize: '20px', color: '#ff9900', stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9991).setAlpha(0)
+
+    this.tweens.add({
+      targets: abilityText,
+      alpha: 1,
+      duration: 300,
+      delay: 500,
+      onComplete: () => {
+        this.time.delayedCall(800, () => {
+          this.tweens.add({
+            targets: abilityText,
+            alpha: 0, duration: 300,
+            onComplete: () => abilityText.destroy(),
+          })
+        })
+      },
+    })
+
+    // Screen effects
+    this.cameras.main.shake(200, 0.01)
+    this.visualEffects?.screenFlash(0xff0000, 0.3, 200)
+
+    // Resume after intro
+    this.time.delayedCall(1500, () => {
+      this.physics.resume()
+    })
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EVOLUTION UPDATE: Floor Clear Celebration
+  // ═══════════════════════════════════════════════════════════════
+
+  private showFloorClearCelebration(floorNum: number) {
+    const sw = this.scale.width
+    const sh = this.scale.height
+
+    // "FLOOR CLEARED" text
+    const text = this.add.text(sw / 2, sh / 2 - 40, `FLOOR ${floorNum} CLEARED!`, {
+      fontSize: '42px', fontStyle: 'bold', color: '#2ecc71',
+      stroke: '#000', strokeThickness: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8000).setScale(0)
+
+    this.tweens.add({
+      targets: text,
+      scale: 1.2,
+      duration: 300,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          alpha: 0,
+          y: text.y - 60,
+          duration: 1500,
+          ease: 'Cubic.easeOut',
+          onComplete: () => text.destroy(),
+        })
+      },
+    })
+
+    // Stats summary
+    const statsText = this.add.text(sw / 2, sh / 2 + 20,
+      `Kills: ${this.enemiesKilled} | Gold: $${this.runStats.totalMoney} | Combo: ${this.runStats.highestCombo}x`, {
+      fontSize: '18px', color: '#88c0d0', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8000).setAlpha(0)
+
+    this.tweens.add({
+      targets: statsText,
+      alpha: 1,
+      duration: 300,
+      delay: 200,
+      onComplete: () => {
+        this.tweens.add({
+          targets: statsText,
+          alpha: 0,
+          duration: 1200,
+          delay: 800,
+          onComplete: () => statsText.destroy(),
+        })
+      },
+    })
+
+    // Particle explosion (green)
+    for (let i = 0; i < 30; i++) {
+      const angle = (i / 30) * Math.PI * 2
+      const speed = Phaser.Math.Between(80, 200)
+      const colors = [0x2ecc71, 0x27ae60, 0xf1c40f, 0x3498db]
+      const p = this.add.circle(sw / 2, sh / 2, Phaser.Math.Between(3, 7), Phaser.Math.RND.pick(colors))
+        .setScrollFactor(0).setDepth(8000)
+
+      this.tweens.add({
+        targets: p,
+        x: sw / 2 + Math.cos(angle) * speed,
+        y: sh / 2 + Math.sin(angle) * speed,
+        alpha: 0,
+        scale: 0,
+        duration: Phaser.Math.Between(600, 1000),
+        ease: 'Cubic.easeOut',
+        onComplete: () => p.destroy(),
+      })
+    }
+
+    // Green screen flash
+    this.visualEffects?.screenFlash(0x2ecc71, 0.3, 200)
   }
 }

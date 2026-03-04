@@ -351,6 +351,173 @@ export const ITEM_POOL: ItemDefinition[] = [
   },
 ]
 
+// ═══════════════════════════════════════════════════════════════
+// ARTIFACT SYSTEM - Unique legendary items with trigger-effect mechanics
+// ═══════════════════════════════════════════════════════════════
+
+export type ArtifactTrigger =
+  | { type: 'on_nth_shot'; n: number }
+  | { type: 'on_kill_streak'; kills: number; window: number }
+  | { type: 'on_hit_received'; chance: number }
+  | { type: 'on_kill'; chance: number }
+  | { type: 'on_kill_count'; every: number }
+  | { type: 'passive' }
+  | { type: 'on_death' }
+  | { type: 'on_reload'; chance: number }
+  | { type: 'on_low_health'; threshold: number }
+  | { type: 'on_timer'; interval: number }
+
+export type ArtifactEffect =
+  | { type: 'freeze_time'; duration: number }
+  | { type: 'black_hole'; duration: number }
+  | { type: 'reflect_damage'; mult: number }
+  | { type: 'damage_multiplier'; mult: number; duration: number }
+  | { type: 'heal'; percent: number }
+  | { type: 'chain_lightning'; targets: number; damage: number }
+  | { type: 'fire_nova'; damage: number; radius: number }
+  | { type: 'revive'; healthPercent: number }
+  | { type: 'teleport_behind' }
+  | { type: 'freeze_enemies'; duration: number }
+  | { type: 'damage_aura'; dps: number; radius: number; duration: number }
+  | { type: 'buff_damage'; percent: number; duration: number }
+  | { type: 'instant_reload' }
+  | { type: 'stun_boss'; duration: number }
+
+export interface ArtifactDefinition {
+  id: string
+  name: string
+  icon: string
+  rarity: ItemRarity.EPIC | ItemRarity.LEGENDARY
+  description: string
+  trigger: ArtifactTrigger
+  effect: ArtifactEffect
+  color: number
+}
+
+export const ARTIFACT_POOL: ArtifactDefinition[] = [
+  {
+    id: 'chrono_shard', name: 'Chrono Shard', icon: '⏱️',
+    rarity: ItemRarity.LEGENDARY, color: 0x74b9ff,
+    description: 'Every 10th shot freezes time for 0.5s',
+    trigger: { type: 'on_nth_shot', n: 10 },
+    effect: { type: 'freeze_time', duration: 500 }
+  },
+  {
+    id: 'void_heart', name: 'Void Heart', icon: '🖤',
+    rarity: ItemRarity.LEGENDARY, color: 0x2d0050,
+    description: '5 kills in 3s creates a black hole',
+    trigger: { type: 'on_kill_streak', kills: 5, window: 3000 },
+    effect: { type: 'black_hole', duration: 2000 }
+  },
+  {
+    id: 'mirror_shield', name: 'Mirror Shield', icon: '🪞',
+    rarity: ItemRarity.EPIC, color: 0xdfe6e9,
+    description: '15% chance to reflect damage when hit',
+    trigger: { type: 'on_hit_received', chance: 0.15 },
+    effect: { type: 'reflect_damage', mult: 2.0 }
+  },
+  {
+    id: 'berserkers_oath', name: "Berserker's Oath", icon: '🔥',
+    rarity: ItemRarity.LEGENDARY, color: 0xff0000,
+    description: 'Below 25% HP: 3x damage, but cannot heal',
+    trigger: { type: 'on_low_health', threshold: 0.25 },
+    effect: { type: 'damage_multiplier', mult: 3.0, duration: 0 }
+  },
+  {
+    id: 'phoenix_plume', name: 'Phoenix Plume', icon: '🔥',
+    rarity: ItemRarity.LEGENDARY, color: 0xff6600,
+    description: 'Revive once on death with 50% HP + fire nova',
+    trigger: { type: 'on_death' },
+    effect: { type: 'revive', healthPercent: 0.5 }
+  },
+  {
+    id: 'thunder_core', name: 'Thunder Core', icon: '⚡',
+    rarity: ItemRarity.EPIC, color: 0xf9ca24,
+    description: 'Every 20 kills triggers chain lightning (5 targets)',
+    trigger: { type: 'on_kill_count', every: 20 },
+    effect: { type: 'chain_lightning', targets: 5, damage: 100 }
+  },
+  {
+    id: 'vampire_fang', name: 'Vampire Fang', icon: '🧛',
+    rarity: ItemRarity.EPIC, color: 0xc0392b,
+    description: 'Heal 5% of max HP on each kill',
+    trigger: { type: 'on_kill', chance: 1.0 },
+    effect: { type: 'heal', percent: 0.05 }
+  },
+  {
+    id: 'gravity_lens', name: 'Gravity Lens', icon: '🌀',
+    rarity: ItemRarity.EPIC, color: 0x6c5ce7,
+    description: 'Every 15th shot curves toward nearest enemy',
+    trigger: { type: 'on_nth_shot', n: 15 },
+    effect: { type: 'black_hole', duration: 500 }
+  },
+  {
+    id: 'shadow_step', name: 'Shadow Step', icon: '👤',
+    rarity: ItemRarity.EPIC, color: 0x2c3e50,
+    description: '20% chance to teleport behind attacker when hit',
+    trigger: { type: 'on_hit_received', chance: 0.20 },
+    effect: { type: 'teleport_behind' }
+  },
+  {
+    id: 'inferno_ring', name: 'Inferno Ring', icon: '💍',
+    rarity: ItemRarity.LEGENDARY, color: 0xff4500,
+    description: 'Fire nova (200 dmg) every 30s in combat',
+    trigger: { type: 'on_timer', interval: 30000 },
+    effect: { type: 'fire_nova', damage: 200, radius: 250 }
+  },
+  {
+    id: 'frost_crown', name: 'Frost Crown', icon: '👑',
+    rarity: ItemRarity.EPIC, color: 0x74b9ff,
+    description: '25% chance on kill to freeze nearby enemies 2s',
+    trigger: { type: 'on_kill', chance: 0.25 },
+    effect: { type: 'freeze_enemies', duration: 2000 }
+  },
+  {
+    id: 'nano_swarm', name: 'Nano Swarm', icon: '🤖',
+    rarity: ItemRarity.EPIC, color: 0x00cec9,
+    description: 'Damage aura deals 15 DPS in 150px radius',
+    trigger: { type: 'passive' },
+    effect: { type: 'damage_aura', dps: 15, radius: 150, duration: 0 }
+  },
+  {
+    id: 'quantum_core', name: 'Quantum Core', icon: '⚛️',
+    rarity: ItemRarity.EPIC, color: 0x6c5ce7,
+    description: '10% chance on reload for instant double magazine',
+    trigger: { type: 'on_reload', chance: 0.10 },
+    effect: { type: 'instant_reload' }
+  },
+  {
+    id: 'soul_harvester', name: 'Soul Harvester', icon: '💀',
+    rarity: ItemRarity.LEGENDARY, color: 0x8e44ad,
+    description: '10+ kill streak: +50% damage for 5s',
+    trigger: { type: 'on_kill_streak', kills: 10, window: 10000 },
+    effect: { type: 'buff_damage', percent: 50, duration: 5000 }
+  },
+  {
+    id: 'titans_gauntlet', name: "Titan's Gauntlet", icon: '🥊',
+    rarity: ItemRarity.LEGENDARY, color: 0x6c5b7b,
+    description: '20% chance to stun boss for 1s on hit',
+    trigger: { type: 'on_hit_received', chance: 0.20 },
+    effect: { type: 'stun_boss', duration: 1000 }
+  },
+]
+
+/**
+ * Roll for artifact drop (from bosses or elite enemies)
+ */
+export function rollArtifactDrop(isBoss: boolean, isLegendary: boolean): ArtifactDefinition | null {
+  const dropChance = isLegendary ? 0.40 : (isBoss ? 0.10 : 0.02)
+  if (Math.random() > dropChance) return null
+
+  // Filter by rarity - legendary bosses can drop legendary artifacts
+  const pool = isLegendary
+    ? ARTIFACT_POOL
+    : ARTIFACT_POOL.filter(a => a.rarity === ItemRarity.EPIC)
+
+  if (pool.length === 0) return null
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
 export class ItemDrop extends Phaser.Physics.Arcade.Sprite {
   private item: ItemDefinition
   private floatTween?: Phaser.Tweens.Tween

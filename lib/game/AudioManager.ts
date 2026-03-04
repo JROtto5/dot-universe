@@ -1,5 +1,9 @@
 // AudioManager - Dubstep style music with proper cleanup
 
+import { settingsManager } from './SettingsManager'
+
+export type BossMusicType = 'default' | 'dragon' | 'phoenix' | 'void_lord' | 'titan' | 'plague_mother'
+
 export class AudioManager {
   private static instance: AudioManager
   private audioContext: AudioContext | null = null
@@ -11,13 +15,37 @@ export class AudioManager {
   private musicMuted = false
   private sfxMuted = false
   private musicPlaying = false
+  private currentBossType: BossMusicType = 'default'
 
   private activeOscillators: Set<OscillatorNode> = new Set()
   private activeBufferSources: Set<AudioBufferSourceNode> = new Set()
   private musicInterval: ReturnType<typeof setInterval> | null = null
   private beatIndex = 0
+  private settingsUnsubscribe: (() => void) | null = null
 
-  private constructor() {}
+  private constructor() {
+    // Hook into SettingsManager for volume sync
+    this.syncFromSettings()
+    this.settingsUnsubscribe = settingsManager.onChange(() => this.syncFromSettings())
+  }
+
+  private syncFromSettings() {
+    try {
+      this.musicVolume = settingsManager.getEffectiveMusicVolume()
+      this.sfxVolume = settingsManager.getEffectiveSfxVolume()
+      this.musicMuted = settingsManager.get('musicMuted')
+      this.sfxMuted = settingsManager.get('sfxMuted')
+
+      if (this.musicGain) {
+        this.musicGain.gain.value = this.musicMuted ? 0 : this.musicVolume
+      }
+      if (this.sfxGain) {
+        this.sfxGain.gain.value = this.sfxMuted ? 0 : this.sfxVolume
+      }
+    } catch (e) {
+      // SettingsManager may not be ready yet, use defaults
+    }
+  }
 
   static getInstance(): AudioManager {
     if (!AudioManager.instance) {
@@ -247,7 +275,7 @@ export class AudioManager {
     this.musicInterval = setInterval(() => this.playDubstepBeat(), 125)
   }
 
-  playBossMusic() {
+  playBossMusic(bossType?: BossMusicType) {
     this.stopMusic()
 
     this.initializeAudioContext()
@@ -255,10 +283,28 @@ export class AudioManager {
 
     this.musicPlaying = true
     this.beatIndex = 0
+    this.currentBossType = bossType || 'default'
 
-    // Faster tempo for boss (150 BPM)
+    // Boss-specific tempos
+    let intervalMs = 100 // default 150 BPM
+    switch (this.currentBossType) {
+      case 'dragon':
+      case 'phoenix':
+        intervalMs = 75 // 200 BPM - intense
+        break
+      case 'void_lord':
+        intervalMs = 167 // 90 BPM - slow and ominous
+        break
+      case 'titan':
+        intervalMs = 115 // 130 BPM - heavy
+        break
+      case 'plague_mother':
+        intervalMs = 100 // 150 BPM - frantic
+        break
+    }
+
     this.playDubstepBeat()
-    this.musicInterval = setInterval(() => this.playDubstepBeat(), 100)
+    this.musicInterval = setInterval(() => this.playDubstepBeat(), intervalMs)
   }
 
   stopMusic() {
@@ -352,6 +398,46 @@ export class AudioManager {
         break
       case 'hit':
         this.playTone(150, 0.08, 'triangle', 0.6)
+        break
+      case 'prestige':
+        // Ascending whoosh
+        this.playTone(400, 0.15, 'sine', 0.5)
+        setTimeout(() => this.playTone(600, 0.15, 'sine', 0.6), 100)
+        setTimeout(() => this.playTone(900, 0.15, 'sine', 0.7), 200)
+        setTimeout(() => this.playTone(1200, 0.2, 'sine', 0.8), 300)
+        setTimeout(() => this.playTone(1600, 0.3, 'sine', 0.6), 400)
+        break
+      case 'companionAbility':
+        this.playTone(700, 0.08, 'square', 0.4)
+        setTimeout(() => this.playTone(900, 0.1, 'square', 0.5), 60)
+        break
+      case 'companionLevelUp':
+        this.playTone(800, 0.1, 'sine', 0.5)
+        setTimeout(() => this.playTone(1000, 0.1, 'sine', 0.6), 80)
+        setTimeout(() => this.playTone(1200, 0.15, 'sine', 0.5), 160)
+        break
+      case 'elementalFire':
+        this.playTone(200, 0.1, 'sawtooth', 0.3)
+        setTimeout(() => this.playTone(250, 0.08, 'sawtooth', 0.2), 50)
+        break
+      case 'elementalIce':
+        this.playTone(1200, 0.06, 'sine', 0.4)
+        setTimeout(() => this.playTone(1500, 0.08, 'sine', 0.3), 30)
+        break
+      case 'elementalLightning':
+        this.playTone(1800, 0.04, 'sawtooth', 0.5)
+        setTimeout(() => this.playTone(800, 0.06, 'sawtooth', 0.3), 30)
+        break
+      case 'elementalVoid':
+        this.playTone(80, 0.15, 'sine', 0.4)
+        setTimeout(() => this.playTone(60, 0.2, 'sine', 0.3), 80)
+        break
+      case 'weaponEvolve':
+        this.playTone(523, 0.12, 'sine', 0.7)
+        setTimeout(() => this.playTone(659, 0.12, 'sine', 0.7), 100)
+        setTimeout(() => this.playTone(784, 0.12, 'sine', 0.7), 200)
+        setTimeout(() => this.playTone(1047, 0.15, 'sine', 0.8), 300)
+        setTimeout(() => this.playTone(1319, 0.2, 'sine', 0.9), 400)
         break
     }
   }

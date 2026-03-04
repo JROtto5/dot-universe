@@ -155,6 +155,19 @@ export class WeaponMasterySystem {
   }
 
   /**
+   * Get the highest mastery rank index across all weapons (0-5, where 5=Grandmaster)
+   */
+  getHighestRank(): number {
+    let highest = 0
+    for (const name of TRACKED_WEAPONS) {
+      const rank = this.getRank(name)
+      const idx = MASTERY_RANKS.indexOf(rank)
+      if (idx > highest) highest = idx
+    }
+    return highest
+  }
+
+  /**
    * Get count of weapons at a specific rank or above
    */
   getWeaponsAtRank(rankName: string): number {

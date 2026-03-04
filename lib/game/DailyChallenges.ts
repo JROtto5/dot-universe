@@ -342,3 +342,225 @@ export function getDailyChallengeManager(): DailyChallengeManager {
   }
   return dailyChallengeManager
 }
+
+// ============= CLICKER DAILY CHALLENGES =============
+
+export type ClickerChallengeType = 'clicks' | 'buildings' | 'dots_earned' | 'combo' | 'golden_dots' | 'upgrades' | 'prestige' | 'dps' | 'click_frenzy'
+
+export interface ClickerDailyChallenge {
+  id: string
+  name: string
+  description: string
+  icon: string
+  type: ClickerChallengeType
+  target: number
+  reward: { dots: number }
+  difficulty: 'easy' | 'medium' | 'hard'
+}
+
+export interface ClickerChallengeProgress {
+  challengeId: string
+  progress: number
+  completed: boolean
+  claimed: boolean
+}
+
+export interface ClickerDailyChallengeState {
+  date: string
+  challenges: ClickerDailyChallenge[]
+  progress: ClickerChallengeProgress[]
+  streak: number
+  lastCompletedDate: string | null
+}
+
+const CLICKER_CHALLENGE_TEMPLATES: Omit<ClickerDailyChallenge, 'id'>[] = [
+  // Easy
+  { name: 'Click Starter', description: 'Click 200 times', icon: '👆', type: 'clicks', target: 200, reward: { dots: 5000 }, difficulty: 'easy' },
+  { name: 'Builder', description: 'Purchase 10 buildings', icon: '🏭', type: 'buildings', target: 10, reward: { dots: 8000 }, difficulty: 'easy' },
+  { name: 'Dot Farmer', description: 'Earn 50,000 dots', icon: '💰', type: 'dots_earned', target: 50000, reward: { dots: 6000 }, difficulty: 'easy' },
+  { name: 'Combo Clicker', description: 'Reach 25 combo', icon: '🔥', type: 'combo', target: 25, reward: { dots: 7000 }, difficulty: 'easy' },
+  // Medium
+  { name: 'Click Warrior', description: 'Click 1,000 times', icon: '🖱️', type: 'clicks', target: 1000, reward: { dots: 25000 }, difficulty: 'medium' },
+  { name: 'Golden Hunter', description: 'Click 5 golden dots', icon: '🌟', type: 'golden_dots', target: 5, reward: { dots: 30000 }, difficulty: 'medium' },
+  { name: 'Upgrade Spree', description: 'Purchase 5 upgrades', icon: '⬆️', type: 'upgrades', target: 5, reward: { dots: 20000 }, difficulty: 'medium' },
+  { name: 'DPS Milestone', description: 'Reach 1,000 DPS', icon: '📈', type: 'dps', target: 1000, reward: { dots: 35000 }, difficulty: 'medium' },
+  { name: 'Frenzy Rider', description: 'Click 100 times during frenzy', icon: '⚡', type: 'click_frenzy', target: 100, reward: { dots: 28000 }, difficulty: 'medium' },
+  // Hard
+  { name: 'Click Legend', description: 'Click 5,000 times', icon: '💥', type: 'clicks', target: 5000, reward: { dots: 100000 }, difficulty: 'hard' },
+  { name: 'Empire Builder', description: 'Purchase 50 buildings', icon: '🏗️', type: 'buildings', target: 50, reward: { dots: 120000 }, difficulty: 'hard' },
+  { name: 'Rebirth', description: 'Prestige once', icon: '⭐', type: 'prestige', target: 1, reward: { dots: 150000 }, difficulty: 'hard' },
+  { name: 'Combo God', description: 'Reach 100 combo', icon: '🌟', type: 'combo', target: 100, reward: { dots: 80000 }, difficulty: 'hard' },
+  { name: 'Golden Shower', description: 'Click 15 golden dots', icon: '✨', type: 'golden_dots', target: 15, reward: { dots: 90000 }, difficulty: 'hard' },
+]
+
+export class ClickerDailyChallengeManager {
+  private state: ClickerDailyChallengeState
+  private onChallengeComplete?: (challenge: ClickerDailyChallenge) => void
+
+  constructor() {
+    this.state = this.loadState()
+    this.checkAndRefreshChallenges()
+  }
+
+  private getToday(): string {
+    return new Date().toISOString().split('T')[0]
+  }
+
+  private loadState(): ClickerDailyChallengeState {
+    if (typeof localStorage === 'undefined') return this.createNewState()
+    const saved = localStorage.getItem('dotclicker_daily_challenges')
+    if (saved) {
+      try { return JSON.parse(saved) } catch { return this.createNewState() }
+    }
+    return this.createNewState()
+  }
+
+  private saveState() {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('dotclicker_daily_challenges', JSON.stringify(this.state))
+    }
+  }
+
+  private createNewState(): ClickerDailyChallengeState {
+    return {
+      date: this.getToday(),
+      challenges: this.generateDailyChallenges(),
+      progress: [],
+      streak: 0,
+      lastCompletedDate: null,
+    }
+  }
+
+  private checkAndRefreshChallenges() {
+    const today = this.getToday()
+    if (this.state.date !== today) {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toISOString().split('T')[0]
+      const allCompletedYesterday = this.state.progress.length === 3 &&
+        this.state.progress.every(p => p.completed && p.claimed)
+      if (this.state.lastCompletedDate === yesterdayStr && allCompletedYesterday) {
+        this.state.streak++
+      } else if (this.state.lastCompletedDate !== yesterdayStr) {
+        this.state.streak = 0
+      }
+      this.state.date = today
+      this.state.challenges = this.generateDailyChallenges()
+      this.state.progress = this.state.challenges.map(c => ({
+        challengeId: c.id, progress: 0, completed: false, claimed: false,
+      }))
+      this.saveState()
+    }
+  }
+
+  private generateDailyChallenges(): ClickerDailyChallenge[] {
+    const seed = this.hashDate(this.getToday() + '_clicker')
+    const rng = this.seededRandom(seed)
+    const easy = CLICKER_CHALLENGE_TEMPLATES.filter(c => c.difficulty === 'easy')
+    const medium = CLICKER_CHALLENGE_TEMPLATES.filter(c => c.difficulty === 'medium')
+    const hard = CLICKER_CHALLENGE_TEMPLATES.filter(c => c.difficulty === 'hard')
+    const challenges: ClickerDailyChallenge[] = [
+      { ...easy[Math.floor(rng() * easy.length)], id: 'clicker_daily_easy' },
+      { ...medium[Math.floor(rng() * medium.length)], id: 'clicker_daily_medium' },
+      { ...hard[Math.floor(rng() * hard.length)], id: 'clicker_daily_hard' },
+    ]
+    const streakMultiplier = 1 + (this.state?.streak || 0) * 0.1
+    challenges.forEach(c => { c.reward.dots = Math.floor(c.reward.dots * streakMultiplier) })
+    return challenges
+  }
+
+  private hashDate(date: string): number {
+    let hash = 0
+    for (let i = 0; i < date.length; i++) {
+      hash = ((hash << 5) - hash) + date.charCodeAt(i)
+      hash = hash & hash
+    }
+    return Math.abs(hash)
+  }
+
+  private seededRandom(seed: number): () => number {
+    return () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
+  }
+
+  getChallenges(): ClickerDailyChallenge[] {
+    this.checkAndRefreshChallenges()
+    return this.state.challenges
+  }
+
+  getProgress(): ClickerChallengeProgress[] { return this.state.progress }
+  getStreak(): number { return this.state.streak }
+
+  getTimeUntilReset(): string {
+    const now = new Date()
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(0, 0, 0, 0)
+    const diff = tomorrow.getTime() - now.getTime()
+    return `${Math.floor(diff / 3600000)}h ${Math.floor((diff % 3600000) / 60000)}m`
+  }
+
+  updateProgress(type: ClickerChallengeType, amount: number) {
+    this.checkAndRefreshChallenges()
+    this.state.progress.forEach((prog, index) => {
+      const challenge = this.state.challenges[index]
+      if (challenge.type === type && !prog.completed) {
+        prog.progress = Math.min(prog.progress + amount, challenge.target)
+        if (prog.progress >= challenge.target) {
+          prog.completed = true
+          if (this.onChallengeComplete) this.onChallengeComplete(challenge)
+          if (this.state.progress.every(p => p.completed)) {
+            this.state.lastCompletedDate = this.getToday()
+          }
+        }
+      }
+    })
+    this.saveState()
+  }
+
+  claimReward(challengeId: string): { dots: number } | null {
+    const index = this.state.progress.findIndex(p => p.challengeId === challengeId)
+    if (index === -1) return null
+    const prog = this.state.progress[index]
+    const challenge = this.state.challenges[index]
+    if (prog.completed && !prog.claimed) {
+      prog.claimed = true
+      this.saveState()
+      return challenge.reward
+    }
+    return null
+  }
+
+  onComplete(callback: (challenge: ClickerDailyChallenge) => void) {
+    this.onChallengeComplete = callback
+  }
+
+  getChallengeInfo(): Array<{
+    challenge: ClickerDailyChallenge
+    progress: number
+    target: number
+    percentage: number
+    completed: boolean
+    claimed: boolean
+  }> {
+    return this.state.challenges.map((challenge, index) => {
+      const prog = this.state.progress[index] || { progress: 0, completed: false, claimed: false }
+      return {
+        challenge,
+        progress: prog.progress,
+        target: challenge.target,
+        percentage: Math.min(100, (prog.progress / challenge.target) * 100),
+        completed: prog.completed,
+        claimed: prog.claimed,
+      }
+    })
+  }
+}
+
+let clickerDailyChallengeManager: ClickerDailyChallengeManager | null = null
+
+export function getClickerDailyChallengeManager(): ClickerDailyChallengeManager {
+  if (!clickerDailyChallengeManager) {
+    clickerDailyChallengeManager = new ClickerDailyChallengeManager()
+  }
+  return clickerDailyChallengeManager
+}

@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/context/AuthContext'
 import { supabase } from '../../lib/supabase/client'
 import { SocialShare } from '../../lib/components/SocialShare'
+import { prestigeSystem } from '../../lib/game/PrestigeSystem'
+import { companionSystem, COMPANION_DEFINITIONS } from '../../lib/game/CompanionSystem'
+import { elementalSystem } from '../../lib/game/ElementalSystem'
+import type { ElementType } from '../../lib/game/ElementalSystem'
+import type { CompanionType } from '../../lib/game/CompanionSystem'
 
 interface PlayerStats {
   // DotSlayer stats
@@ -642,6 +647,16 @@ export default function ProfilePage() {
   const [recentRuns, setRecentRuns] = useState<any[]>([])
   const [hoveredBackBtn, setHoveredBackBtn] = useState(false)
   const [hoveredShareBtn, setHoveredShareBtn] = useState(false)
+  const [achievementFilter, setAchievementFilter] = useState<'all' | 'slayer' | 'clicker' | 'synergy'>('all')
+
+  // CONVERGENCE: Prestige, Companions, Elemental stats
+  const [prestigeLevel, setPrestigeLevel] = useState(0)
+  const [ngPlusTier, setNGPlusTier] = useState(0)
+  const [totalAPEarned, setTotalAPEarned] = useState(0)
+  const [highestFloorEver, setHighestFloorEver] = useState(0)
+  const [unlockedCompanions, setUnlockedCompanions] = useState<CompanionType[]>([])
+  const [companionLevels, setCompanionLevels] = useState<Record<string, number>>({})
+  const [elementalKills, setElementalKills] = useState<Record<ElementType, number>>({ fire: 0, ice: 0, lightning: 0, void: 0 })
 
   useEffect(() => {
     if (!loading && !user) {
@@ -741,6 +756,27 @@ export default function ProfilePage() {
     loadProfileData()
   }, [user])
 
+  // CONVERGENCE: Load prestige, companion, and elemental data
+  useEffect(() => {
+    try {
+      setPrestigeLevel(prestigeSystem.getPrestigeLevel())
+      setNGPlusTier(prestigeSystem.getNGPlusTier())
+      const pStats = prestigeSystem.getPrestigeStats()
+      setTotalAPEarned(pStats.totalAPEarned)
+      setHighestFloorEver(pStats.highestFloorEver)
+    } catch { /* not initialized */ }
+    try {
+      const companions = companionSystem.getUnlockedCompanions()
+      setUnlockedCompanions(companions)
+      const levels: Record<string, number> = {}
+      companions.forEach(c => { levels[c] = companionSystem.getLevel(c) })
+      setCompanionLevels(levels)
+    } catch { /* not initialized */ }
+    try {
+      setElementalKills(elementalSystem.getElementalKills())
+    } catch { /* not initialized */ }
+  }, [])
+
   if (loading) {
     return (
       <div style={styles.loading}>
@@ -835,213 +871,553 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tab Navigation */}
       <div style={styles.tabs}>
-        <button
-          style={activeTab === 'stats' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('stats')}
-        >
-          📊 Statistics
-        </button>
-        <button
-          style={activeTab === 'achievements' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('achievements')}
-        >
-          🏆 Achievements ({stats?.achievementsUnlocked || 0}/{stats?.totalAchievements || 0})
-        </button>
-        <button
-          style={activeTab === 'milestones' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('milestones')}
-        >
-          🎯 Milestones
-        </button>
-        <button
-          style={activeTab === 'mastery' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('mastery')}
-        >
-          🔫 Mastery
-        </button>
-        <button
-          style={activeTab === 'challenges' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('challenges')}
-        >
-          🏅 Challenges
-        </button>
-        <button
-          style={activeTab === 'collection' ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab('collection')}
-        >
-          📦 Collection
-        </button>
+        {[
+          { id: 'stats' as const, label: 'Overview', icon: '📊' },
+          { id: 'achievements' as const, label: `Achievements (${stats?.achievementsUnlocked || 0}/${stats?.totalAchievements || 0})`, icon: '🏆' },
+          { id: 'milestones' as const, label: 'Slayer', icon: '⚔️' },
+          { id: 'challenges' as const, label: 'Clicker', icon: '●' },
+          { id: 'mastery' as const, label: 'Mastery', icon: '🔫' },
+          { id: 'collection' as const, label: 'Collection', icon: '📦' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            style={activeTab === tab.id ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
       <main style={styles.profileContent}>
         {activeTab === 'stats' && stats && (
-          <div style={styles.statsGrid}>
-            {/* DotSlayer Stats */}
-            <div style={styles.statsSection}>
-              <h2 style={styles.slayerH2}><span style={styles.gameIcon}>⚔️</span> DotSlayer</h2>
-              <div style={styles.statsCards}>
-                <div style={styles.statCardHighlightSlayer}>
-                  <span style={styles.statValueSlayer}>{stats.slayer.highestFloor}</span>
-                  <span style={styles.statLabel}>Highest Floor</span>
+          <div>
+            {/* Overview Banner */}
+            <div style={{
+              background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+              borderRadius: '20px', padding: '25px', marginBottom: '25px',
+              border: '1px solid rgba(243, 156, 18, 0.15)', textAlign: 'center',
+            }}>
+              <span style={{ display: 'block', fontSize: '0.7rem', color: '#889', letterSpacing: '3px', marginBottom: '5px' }}>UNIVERSE LEVEL</span>
+              <span style={{
+                fontSize: '3rem', fontWeight: 900,
+                background: 'linear-gradient(135deg, #f39c12, #f1c40f, #ff6b00)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>{stats.synergyLevel}</span>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '15px', flexWrap: 'wrap' as const }}>
+                <div style={{ padding: '8px 16px', background: 'rgba(255, 107, 0, 0.1)', borderRadius: '10px', border: '1px solid rgba(255, 107, 0, 0.2)' }}>
+                  <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#ff6b00' }}>{stats.slayer.highestFloor}</span>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: '#778' }}>Best Floor</span>
                 </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{formatNumber(stats.slayer.totalKills)}</span>
-                  <span style={styles.statLabel}>Total Kills</span>
+                <div style={{ padding: '8px 16px', background: 'rgba(0, 217, 255, 0.1)', borderRadius: '10px', border: '1px solid rgba(0, 217, 255, 0.2)' }}>
+                  <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#00d9ff' }}>{formatNumber(stats.clicker.totalDots)}</span>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: '#778' }}>Total Dots</span>
                 </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{stats.slayer.bossesDefeated}</span>
-                  <span style={styles.statLabel}>Bosses Defeated</span>
-                </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{stats.slayer.bestCombo}x</span>
-                  <span style={styles.statLabel}>Best Combo</span>
-                </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{stats.slayer.gamesWon}/{stats.slayer.gamesPlayed}</span>
-                  <span style={styles.statLabel}>Games Won</span>
-                </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{formatNumber(stats.slayer.totalDamage)}</span>
-                  <span style={styles.statLabel}>Total Damage</span>
-                </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{formatNumber(stats.slayer.totalGoldEarned)}</span>
-                  <span style={styles.statLabel}>Gold Earned</span>
-                </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{stats.slayer.perfectFloors}</span>
-                  <span style={styles.statLabel}>Perfect Floors</span>
-                </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{formatTime(stats.slayer.totalPlaytime)}</span>
-                  <span style={styles.statLabel}>Playtime</span>
+                <div style={{ padding: '8px 16px', background: 'rgba(46, 204, 113, 0.1)', borderRadius: '10px', border: '1px solid rgba(46, 204, 113, 0.2)' }}>
+                  <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#2ecc71' }}>{stats.achievementsUnlocked}/{stats.totalAchievements}</span>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: '#778' }}>Achievements</span>
                 </div>
               </div>
             </div>
 
-            {/* Dot Clicker Stats */}
-            <div style={styles.statsSection}>
-              <h2 style={styles.clickerH2}><span style={styles.gameIcon}>●</span> Dot Clicker</h2>
-              <div style={styles.statsCards}>
-                <div style={styles.statCardHighlightClicker}>
-                  <span style={styles.statValueClicker}>{formatNumber(stats.clicker.totalDots)}</span>
-                  <span style={styles.statLabel}>Total Dots</span>
+            <div style={styles.statsGrid}>
+              {/* DotSlayer Stats */}
+              <div style={styles.statsSection}>
+                <h2 style={styles.slayerH2}><span style={styles.gameIcon}>⚔️</span> DotSlayer</h2>
+                <div style={styles.statsCards}>
+                  <div style={styles.statCardHighlightSlayer}>
+                    <span style={styles.statValueSlayer}>{stats.slayer.highestFloor}</span>
+                    <span style={styles.statLabel}>Highest Floor</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{formatNumber(stats.slayer.totalKills)}</span>
+                    <span style={styles.statLabel}>Total Kills</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{stats.slayer.bossesDefeated}</span>
+                    <span style={styles.statLabel}>Bosses Defeated</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{stats.slayer.bestCombo}x</span>
+                    <span style={styles.statLabel}>Best Combo</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{stats.slayer.gamesWon}/{stats.slayer.gamesPlayed}</span>
+                    <span style={styles.statLabel}>Games Won</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{formatNumber(stats.slayer.totalDamage)}</span>
+                    <span style={styles.statLabel}>Total Damage</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{formatNumber(stats.slayer.totalGoldEarned)}</span>
+                    <span style={styles.statLabel}>Gold Earned</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{stats.slayer.perfectFloors}</span>
+                    <span style={styles.statLabel}>Perfect Floors</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{formatTime(stats.slayer.totalPlaytime)}</span>
+                    <span style={styles.statLabel}>Playtime</span>
+                  </div>
                 </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{stats.clicker.totalPrestiges}</span>
-                  <span style={styles.statLabel}>Prestiges</span>
+                {/* Inline floor progress bar */}
+                <div style={{ marginTop: '15px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#889' }}>Campaign Progress</span>
+                    <span style={{ fontSize: '0.75rem', color: '#ff6b00', fontWeight: 600 }}>{stats.slayer.highestFloor}/150</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, (stats.slayer.highestFloor / 150) * 100)}%`, background: 'linear-gradient(90deg, #ff6b00, #ff4400)', borderRadius: '3px', transition: 'width 0.5s ease' }} />
+                  </div>
                 </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{formatNumber(stats.clicker.highestDps)}</span>
-                  <span style={styles.statLabel}>Peak DPS</span>
+              </div>
+
+              {/* Dot Clicker Stats */}
+              <div style={styles.statsSection}>
+                <h2 style={styles.clickerH2}><span style={styles.gameIcon}>●</span> Dot Clicker</h2>
+                <div style={styles.statsCards}>
+                  <div style={styles.statCardHighlightClicker}>
+                    <span style={styles.statValueClicker}>{formatNumber(stats.clicker.totalDots)}</span>
+                    <span style={styles.statLabel}>Total Dots</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{stats.clicker.totalPrestiges}</span>
+                    <span style={styles.statLabel}>Prestiges</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{formatNumber(stats.clicker.highestDps)}</span>
+                    <span style={styles.statLabel}>Peak DPS</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{stats.clicker.buildingsPurchased}</span>
+                    <span style={styles.statLabel}>Buildings</span>
+                  </div>
+                  <div style={styles.statCard}>
+                    <span style={styles.statValue}>{formatTime(stats.clicker.totalPlaytime)}</span>
+                    <span style={styles.statLabel}>Playtime</span>
+                  </div>
                 </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{stats.clicker.buildingsPurchased}</span>
-                  <span style={styles.statLabel}>Buildings</span>
+                {/* Prestige badges inline */}
+                <div style={{ marginTop: '15px' }}>
+                  <span style={{ display: 'block', fontSize: '0.75rem', color: '#889', marginBottom: '6px' }}>Prestige Milestones</span>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const }}>
+                    {[1, 5, 10, 25, 50, 100].map(p => (
+                      <span key={p} style={{
+                        padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
+                        background: stats.clicker.totalPrestiges >= p ? 'rgba(243, 156, 18, 0.15)' : 'rgba(100, 100, 100, 0.15)',
+                        border: `1px solid ${stats.clicker.totalPrestiges >= p ? 'rgba(243, 156, 18, 0.4)' : 'rgba(100, 100, 100, 0.3)'}`,
+                        color: stats.clicker.totalPrestiges >= p ? '#f1c40f' : '#555',
+                      }}>⭐ {p}</span>
+                    ))}
+                  </div>
                 </div>
-                <div style={styles.statCard}>
-                  <span style={styles.statValue}>{formatTime(stats.clicker.totalPlaytime)}</span>
-                  <span style={styles.statLabel}>Playtime</span>
+              </div>
+            </div>
+
+            {/* CONVERGENCE: Prestige Stats */}
+            <div style={{ marginTop: '30px' }}>
+              <div style={styles.statsGrid}>
+                <div style={{
+                  ...styles.statsSection,
+                  border: '1px solid rgba(243, 156, 18, 0.15)',
+                }}>
+                  <h2 style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    margin: '0 0 20px 0', fontSize: '1.3rem', color: '#f1c40f',
+                  }}><span style={styles.gameIcon}>⭐</span> Prestige</h2>
+                  <div style={styles.statsCards}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(241, 196, 15, 0.1))',
+                      border: '1px solid rgba(243, 156, 18, 0.2)',
+                      borderRadius: '12px', padding: '15px', textAlign: 'center' as const,
+                    }}>
+                      <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: 700, color: '#f1c40f' }}>
+                        {'★'.repeat(Math.min(prestigeLevel, 5))}{prestigeLevel > 5 ? `+${prestigeLevel - 5}` : ''} {prestigeLevel}
+                      </span>
+                      <span style={styles.statLabel}>Prestige Level</span>
+                    </div>
+                    <div style={styles.statCard}>
+                      <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: 700, color: ngPlusTier > 0 ? '#ff0266' : '#555' }}>
+                        {ngPlusTier > 0 ? `NG+${ngPlusTier}` : 'Base'}
+                      </span>
+                      <span style={styles.statLabel}>NG+ Tier</span>
+                    </div>
+                    <div style={styles.statCard}>
+                      <span style={styles.statValue}>{totalAPEarned}</span>
+                      <span style={styles.statLabel}>Total AP Earned</span>
+                    </div>
+                    <div style={styles.statCard}>
+                      <span style={styles.statValue}>{highestFloorEver}</span>
+                      <span style={styles.statLabel}>Highest Floor Ever</span>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Companions Section */}
+                <div style={{
+                  ...styles.statsSection,
+                  border: '1px solid rgba(46, 204, 113, 0.15)',
+                }}>
+                  <h2 style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    margin: '0 0 20px 0', fontSize: '1.3rem', color: '#2ecc71',
+                  }}><span style={styles.gameIcon}>🐾</span> Companions</h2>
+                  {unlockedCompanions.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
+                      {unlockedCompanions.map(cType => {
+                        const def = COMPANION_DEFINITIONS[cType]
+                        const level = companionLevels[cType] || 0
+                        return (
+                          <div key={cType} style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '10px 14px',
+                            background: 'rgba(0, 0, 0, 0.25)',
+                            borderRadius: '10px',
+                            border: `1px solid #${def.color.toString(16).padStart(6, '0')}40`,
+                          }}>
+                            <span style={{ fontSize: '1.5rem' }}>{def.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <span style={{ display: 'block', color: '#ddd', fontWeight: 600, fontSize: '0.9rem' }}>{def.name}</span>
+                              <span style={{ display: 'block', color: '#778', fontSize: '0.75rem' }}>{def.passiveBonus}</span>
+                            </div>
+                            <div style={{ textAlign: 'center' as const }}>
+                              <span style={{ display: 'block', color: '#2ecc71', fontWeight: 700, fontSize: '1.1rem' }}>Lv.{level}</span>
+                              <span style={{ display: 'block', color: '#556', fontSize: '0.65rem' }}>/30</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center' as const, padding: '20px', color: '#556' }}>
+                      <span style={{ display: 'block', fontSize: '2rem', marginBottom: '8px' }}>🐾</span>
+                      <span style={{ fontSize: '0.85rem' }}>No companions unlocked yet</span>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#445', marginTop: '4px' }}>Defeat bosses to unlock companions</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* CONVERGENCE: Elemental Kills */}
+            <div style={{ marginTop: '25px' }}>
+              <div style={{
+                ...styles.statsSection,
+                border: '1px solid rgba(0, 217, 255, 0.1)',
+              }}>
+                <h2 style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  margin: '0 0 20px 0', fontSize: '1.3rem', color: '#00d9ff',
+                }}><span style={styles.gameIcon}>⚡</span> Elemental Kills</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                  {([
+                    { type: 'fire' as ElementType, name: 'Fire', icon: '🔥', color: '#ff6600' },
+                    { type: 'ice' as ElementType, name: 'Ice', icon: '❄️', color: '#00ccff' },
+                    { type: 'lightning' as ElementType, name: 'Lightning', icon: '⚡', color: '#ffcc00' },
+                    { type: 'void' as ElementType, name: 'Void', icon: '🌀', color: '#9b59b6' },
+                  ]).map(elem => {
+                    const kills = elementalKills[elem.type] || 0
+                    return (
+                      <div key={elem.type} style={{
+                        textAlign: 'center' as const,
+                        padding: '14px 10px',
+                        background: `${elem.color}10`,
+                        border: `1px solid ${elem.color}30`,
+                        borderRadius: '12px',
+                      }}>
+                        <span style={{ display: 'block', fontSize: '1.5rem', marginBottom: '6px' }}>{elem.icon}</span>
+                        <span style={{ display: 'block', color: elem.color, fontWeight: 700, fontSize: '1.2rem' }}>{formatNumber(kills)}</span>
+                        <span style={{ display: 'block', color: '#778', fontSize: '0.7rem', marginTop: '4px' }}>{elem.name}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {(() => {
+                  const total = Object.values(elementalKills).reduce((a, b) => a + b, 0)
+                  return total > 0 ? (
+                    <div style={{ marginTop: '12px', textAlign: 'center' as const }}>
+                      <span style={{ color: '#889', fontSize: '0.8rem' }}>Total Elemental Kills: </span>
+                      <span style={{ color: '#00d9ff', fontWeight: 700, fontSize: '0.9rem' }}>{formatNumber(total)}</span>
+                    </div>
+                  ) : null
+                })()}
               </div>
             </div>
           </div>
         )}
 
         {activeTab === 'achievements' && (
-          <div style={styles.achievementsGrid}>
-            {achievements.map((achievement) => (
-              <div
-                key={achievement.id}
-                style={{
-                  ...(achievement.unlocked ? {
-                    ...styles.achievementCard,
-                    background: `rgba(${getRarityColor(achievement.rarity).replace('#', '').match(/.{2}/g)?.map(x => parseInt(x, 16)).join(', ')}, 0.1)`,
-                    borderColor: getRarityColor(achievement.rarity),
-                  } : styles.achievementCardLocked),
-                }}
-              >
-                <div style={styles.achievementIcon}>{achievement.unlocked ? achievement.icon : '🔒'}</div>
-                <div style={styles.achievementInfo}>
-                  <h3 style={styles.achievementInfoH3}>{achievement.unlocked ? achievement.name : '???'}</h3>
-                  <p style={styles.achievementInfoP}>{achievement.unlocked ? achievement.description : 'Keep playing to unlock'}</p>
-                  <span style={getRarityStyle(achievement.rarity)}>{achievement.rarity}</span>
+          <div>
+            {/* Category Filters */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' as const }}>
+              {[
+                { id: 'all' as const, label: 'All', color: '#fff' },
+                { id: 'slayer' as const, label: 'DotSlayer', color: '#ff6b00' },
+                { id: 'clicker' as const, label: 'Dot Clicker', color: '#00d9ff' },
+                { id: 'synergy' as const, label: 'Cross-Game', color: '#f1c40f' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setAchievementFilter(f.id)}
+                  style={{
+                    padding: '8px 18px',
+                    background: achievementFilter === f.id ? `${f.color}20` : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${achievementFilter === f.id ? f.color + '50' : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: '20px',
+                    color: achievementFilter === f.id ? f.color : '#778',
+                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, fontFamily: 'inherit',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {/* Rarity Summary */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '20px' }}>
+              {(['common', 'uncommon', 'rare', 'epic', 'legendary'] as const).map(rarity => {
+                const filtered = achievements.filter(a => (achievementFilter === 'all' || a.game === achievementFilter))
+                const total = filtered.filter(a => a.rarity === rarity).length
+                const unlocked = filtered.filter(a => a.rarity === rarity && a.unlocked).length
+                return total > 0 ? (
+                  <div key={rarity} style={{ textAlign: 'center' }}>
+                    <span style={{ ...getRarityStyle(rarity), fontSize: '0.65rem', padding: '2px 8px' }}>{rarity}</span>
+                    <span style={{ display: 'block', color: getRarityColor(rarity), fontWeight: 700, fontSize: '0.85rem', marginTop: '4px' }}>{unlocked}/{total}</span>
+                  </div>
+                ) : null
+              })}
+            </div>
+            {/* Achievement Grid */}
+            <div style={styles.achievementsGrid}>
+              {achievements
+                .filter(a => achievementFilter === 'all' || a.game === achievementFilter)
+                .sort((a, b) => {
+                  const rarityOrder = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 }
+                  if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1
+                  return rarityOrder[b.rarity] - rarityOrder[a.rarity]
+                })
+                .map((achievement) => (
+                <div
+                  key={achievement.id}
+                  style={{
+                    ...(achievement.unlocked ? {
+                      ...styles.achievementCard,
+                      background: `rgba(${getRarityColor(achievement.rarity).replace('#', '').match(/.{2}/g)?.map(x => parseInt(x, 16)).join(', ')}, 0.1)`,
+                      borderColor: getRarityColor(achievement.rarity),
+                    } : styles.achievementCardLocked),
+                  }}
+                >
+                  <div style={styles.achievementIcon}>{achievement.unlocked ? achievement.icon : '🔒'}</div>
+                  <div style={styles.achievementInfo}>
+                    <h3 style={styles.achievementInfoH3}>{achievement.unlocked ? achievement.name : '???'}</h3>
+                    <p style={styles.achievementInfoP}>{achievement.unlocked ? achievement.description : 'Keep playing to unlock'}</p>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                      <span style={getRarityStyle(achievement.rarity)}>{achievement.rarity}</span>
+                      <span style={{ ...styles.rarityBadgeBase, background: achievement.game === 'slayer' ? '#ff6b0033' : achievement.game === 'clicker' ? '#00d9ff33' : '#f1c40f33', color: achievement.game === 'slayer' ? '#ff6b00' : achievement.game === 'clicker' ? '#00d9ff' : '#f1c40f' }}>
+                        {achievement.game === 'slayer' ? 'Slayer' : achievement.game === 'clicker' ? 'Clicker' : 'Cross-Game'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
         {activeTab === 'milestones' && stats && (
           <div style={styles.milestonesContent}>
-            {/* DotSlayer Milestones */}
+            {/* DotSlayer Journey */}
             <div style={styles.milestoneSection}>
               <h2 style={styles.milestoneSectionH2Slayer}>⚔️ DotSlayer Journey</h2>
               <div style={styles.milestoneTrack}>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.slayer.highestFloor >= 1 ? styles.nodeIconCompleted : styles.nodeIcon}>🏃</span>
-                  <span style={stats.slayer.highestFloor >= 1 ? styles.nodeLabelCompleted : styles.nodeLabel}>Floor 1</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.slayer.highestFloor >= 10 ? styles.nodeIconCompleted : styles.nodeIcon}>⚡</span>
-                  <span style={stats.slayer.highestFloor >= 10 ? styles.nodeLabelCompleted : styles.nodeLabel}>Floor 10</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.slayer.highestFloor >= 25 ? styles.nodeIconCompleted : styles.nodeIcon}>🔥</span>
-                  <span style={stats.slayer.highestFloor >= 25 ? styles.nodeLabelCompleted : styles.nodeLabel}>Floor 25</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.slayer.highestFloor >= 50 ? styles.nodeIconCompleted : styles.nodeIcon}>💀</span>
-                  <span style={stats.slayer.highestFloor >= 50 ? styles.nodeLabelCompleted : styles.nodeLabel}>Floor 50</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.slayer.highestFloor >= 75 ? styles.nodeIconCompleted : styles.nodeIcon}>👹</span>
-                  <span style={stats.slayer.highestFloor >= 75 ? styles.nodeLabelCompleted : styles.nodeLabel}>Floor 75</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.slayer.highestFloor >= 100 ? styles.nodeIconLegendaryCompleted : styles.nodeIconLegendary}>🏆</span>
-                  <span style={stats.slayer.highestFloor >= 100 ? styles.nodeLabelCompleted : styles.nodeLabel}>Floor 100</span>
-                </div>
+                {[
+                  { floor: 1, icon: '🏃', label: 'Floor 1' },
+                  { floor: 10, icon: '⚡', label: 'Floor 10' },
+                  { floor: 25, icon: '🔥', label: 'Floor 25' },
+                  { floor: 50, icon: '💀', label: 'Floor 50' },
+                  { floor: 100, icon: '👹', label: 'Floor 100' },
+                  { floor: 150, icon: '🏆', label: 'Floor 150', legendary: true },
+                ].map((m, i, arr) => (
+                  <div key={m.floor} style={{ display: 'contents' }}>
+                    <div style={styles.milestoneNode}>
+                      <span style={stats.slayer.highestFloor >= m.floor ? (m.legendary ? styles.nodeIconLegendaryCompleted : styles.nodeIconCompleted) : (m.legendary ? styles.nodeIconLegendary : styles.nodeIcon)}>{m.icon}</span>
+                      <span style={stats.slayer.highestFloor >= m.floor ? styles.nodeLabelCompleted : styles.nodeLabel}>{m.label}</span>
+                    </div>
+                    {i < arr.length - 1 && <div style={styles.milestoneLine}></div>}
+                  </div>
+                ))}
               </div>
               <div style={styles.milestoneProgress}>
                 <div style={styles.progressBar}>
-                  <div style={{ ...styles.progressFillSlayer, width: `${Math.min(stats.slayer.highestFloor, 100)}%` }}></div>
+                  <div style={{ ...styles.progressFillSlayer, width: `${Math.min((stats.slayer.highestFloor / 150) * 100, 100)}%` }}></div>
                 </div>
-                <span style={styles.progressText}>{stats.slayer.highestFloor}/100 Floors</span>
+                <span style={styles.progressText}>{stats.slayer.highestFloor}/150 Floors</span>
               </div>
             </div>
 
-            {/* Dot Clicker Milestones */}
+            {/* Stat Visualization - Bar Charts */}
+            <div style={styles.milestoneSection}>
+              <h2 style={styles.milestoneSectionH2Slayer}>📊 Combat Stats</h2>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '12px' }}>
+                {[
+                  { label: 'Total Kills', value: stats.slayer.totalKills, max: Math.max(stats.slayer.totalKills, 10000), color: '#e74c3c' },
+                  { label: 'Total Damage', value: stats.slayer.totalDamage, max: Math.max(stats.slayer.totalDamage, 100000), color: '#ff6b00' },
+                  { label: 'Bosses Defeated', value: stats.slayer.bossesDefeated, max: Math.max(stats.slayer.bossesDefeated, 50), color: '#9b59b6' },
+                  { label: 'Best Combo', value: stats.slayer.bestCombo, max: Math.max(stats.slayer.bestCombo, 200), color: '#f39c12' },
+                  { label: 'Gold Earned', value: stats.slayer.totalGoldEarned, max: Math.max(stats.slayer.totalGoldEarned, 50000), color: '#f1c40f' },
+                  { label: 'Perfect Floors', value: stats.slayer.perfectFloors, max: Math.max(stats.slayer.perfectFloors, 20), color: '#2ecc71' },
+                ].map(stat => (
+                  <div key={stat.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#aab' }}>{stat.label}</span>
+                      <span style={{ fontSize: '0.8rem', color: stat.color, fontWeight: 700 }}>{formatNumber(stat.value)}</span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, (stat.value / stat.max) * 100)}%`, background: `linear-gradient(90deg, ${stat.color}, ${stat.color}88)`, borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
+                <span style={{ color: '#889', fontSize: '0.85rem' }}>Win Rate</span>
+                <span style={{ color: '#2ecc71', fontWeight: 700, fontSize: '0.95rem' }}>
+                  {stats.slayer.gamesPlayed > 0 ? Math.round((stats.slayer.gamesWon / stats.slayer.gamesPlayed) * 100) : 0}%
+                  <span style={{ color: '#667', fontWeight: 400, fontSize: '0.75rem', marginLeft: '6px' }}>({stats.slayer.gamesWon}/{stats.slayer.gamesPlayed})</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Recent Runs */}
+            {recentRuns.length > 0 && (
+              <div style={styles.milestoneSection}>
+                <h2 style={styles.milestoneSectionH2Recent}>📜 Recent Runs</h2>
+                <div style={styles.recentRuns}>
+                  {recentRuns.map((run, i) => (
+                    <div key={run.id || i} style={run.was_victory ? styles.runCardVictory : styles.runCard}>
+                      <div style={styles.runFloor}>Floor {run.floor_reached}</div>
+                      <div style={styles.runStats}>
+                        <span>💰 {formatNumber(run.score)}</span>
+                        <span>💀 {run.kills} kills</span>
+                        <span>⏱️ {formatTime(run.time_played / 60)}</span>
+                      </div>
+                      {run.was_victory && <span style={styles.victoryBadge}>🏆 VICTORY</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Weapon Mastery Tab */}
+        {activeTab === 'mastery' && (
+          <div style={{ padding: '20px 0' }}>
+            <h2 style={{ textAlign: 'center', color: '#f39c12', marginBottom: '10px', fontSize: '1.3rem' }}>🔫 Weapon Mastery</h2>
+            <p style={{ textAlign: 'center', color: '#888', marginBottom: '10px', fontSize: '0.85rem' }}>
+              Kill enemies with each weapon to earn permanent damage bonuses that persist across runs!
+            </p>
+            {/* Mastery Summary */}
+            {(() => {
+              const weapons = ['Pistol', 'Shotgun', 'SMG', 'Rifle', 'Sniper', 'Minigun', 'Rocket Launcher', 'Laser Rifle', 'Flamethrower', 'Rail Gun', 'Grenade Launcher']
+              const allKills = weapons.map(w => {
+                try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return d.kills?.[w] || 0 } catch { return 0 }
+              })
+              const totalKills = allKills.reduce((a, b) => a + b, 0)
+              const mastered = allKills.filter(k => k >= 50000).length
+              return (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' as const }}>
+                  <div style={{ textAlign: 'center', padding: '8px 16px', background: 'rgba(243, 156, 18, 0.1)', borderRadius: '10px', border: '1px solid rgba(243, 156, 18, 0.2)' }}>
+                    <span style={{ display: 'block', fontSize: '1.3rem', fontWeight: 800, color: '#f39c12' }}>{totalKills.toLocaleString()}</span>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#778' }}>Total Weapon Kills</span>
+                  </div>
+                  <div style={{ textAlign: 'center', padding: '8px 16px', background: 'rgba(255, 2, 102, 0.1)', borderRadius: '10px', border: '1px solid rgba(255, 2, 102, 0.2)' }}>
+                    <span style={{ display: 'block', fontSize: '1.3rem', fontWeight: 800, color: '#ff0266' }}>{mastered}/{weapons.length}</span>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#778' }}>Grandmaster</span>
+                  </div>
+                </div>
+              )
+            })()}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+              {['Pistol', 'Shotgun', 'SMG', 'Rifle', 'Sniper', 'Minigun', 'Rocket Launcher', 'Laser Rifle', 'Flamethrower', 'Rail Gun', 'Grenade Launcher'].map(weapon => {
+                const kills = (() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return d.kills?.[weapon] || 0 } catch { return 0 } })()
+                const ranks = [
+                  { name: 'Novice', req: 0, color: '#95a5a6', bonus: '+0%' },
+                  { name: 'Apprentice', req: 100, color: '#2ecc71', bonus: '+5%' },
+                  { name: 'Journeyman', req: 500, color: '#3498db', bonus: '+10%' },
+                  { name: 'Expert', req: 2000, color: '#9b59b6', bonus: '+20%' },
+                  { name: 'Master', req: 10000, color: '#f39c12', bonus: '+35%' },
+                  { name: 'Grandmaster', req: 50000, color: '#ff0266', bonus: '+50%' },
+                ]
+                let rank = ranks[0]
+                let nextRank: typeof ranks[0] | null = ranks[1]
+                for (let i = ranks.length - 1; i >= 0; i--) {
+                  if (kills >= ranks[i].req) { rank = ranks[i]; nextRank = ranks[i + 1] || null; break }
+                }
+                const progress = nextRank ? Math.min(100, ((kills - rank.req) / (nextRank.req - rank.req)) * 100) : 100
+                const rankIndex = ranks.indexOf(rank)
+
+                return (
+                  <div key={weapon} style={{
+                    background: 'rgba(20, 25, 40, 0.8)', borderRadius: '10px', padding: '14px 15px',
+                    border: `1px solid ${rank.color}40`,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem' }}>{weapon}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ color: rank.color, fontWeight: 700, fontSize: '0.8rem' }}>{rank.name}</span>
+                        <span style={{ color: rank.color, fontSize: '0.65rem', background: `${rank.color}20`, padding: '1px 6px', borderRadius: '8px' }}>{rank.bonus}</span>
+                      </div>
+                    </div>
+                    {/* Rank pips */}
+                    <div style={{ display: 'flex', gap: '3px', marginBottom: '6px' }}>
+                      {ranks.map((r, i) => (
+                        <div key={r.name} style={{ flex: 1, height: '3px', borderRadius: '2px', background: i <= rankIndex ? r.color : 'rgba(255,255,255,0.08)' }} />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                      <span style={{ color: '#aab', fontSize: '0.8rem', fontWeight: 600 }}>{kills.toLocaleString()} kills</span>
+                      {nextRank ? (
+                        <span style={{ color: '#556', fontSize: '0.7rem' }}>Next: {nextRank.name} ({nextRank.req.toLocaleString()})</span>
+                      ) : (
+                        <span style={{ color: '#ff0266', fontSize: '0.7rem', fontWeight: 600 }}>MAX RANK</span>
+                      )}
+                    </div>
+                    <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg, ${rank.color}, ${rank.color}88)`, borderRadius: '3px', transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Clicker Tab - Stats + Prestige Progress */}
+        {activeTab === 'challenges' && stats && (
+          <div style={styles.milestonesContent}>
+            {/* Clicker Empire Overview */}
             <div style={styles.milestoneSection}>
               <h2 style={styles.milestoneSectionH2Clicker}>● Dot Clicker Empire</h2>
               <div style={styles.milestoneTrack}>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.clicker.totalDots >= 1000 ? styles.nodeIconCompleted : styles.nodeIcon}>👆</span>
-                  <span style={stats.clicker.totalDots >= 1000 ? styles.nodeLabelCompleted : styles.nodeLabel}>1K Dots</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.clicker.totalDots >= 1000000 ? styles.nodeIconCompleted : styles.nodeIcon}>💰</span>
-                  <span style={stats.clicker.totalDots >= 1000000 ? styles.nodeLabelCompleted : styles.nodeLabel}>1M Dots</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.clicker.totalDots >= 1000000000 ? styles.nodeIconCompleted : styles.nodeIcon}>🏦</span>
-                  <span style={stats.clicker.totalDots >= 1000000000 ? styles.nodeLabelCompleted : styles.nodeLabel}>1B Dots</span>
-                </div>
-                <div style={styles.milestoneLine}></div>
-                <div style={styles.milestoneNode}>
-                  <span style={stats.clicker.totalDots >= 1000000000000 ? styles.nodeIconLegendaryCompleted : styles.nodeIconLegendary}>💎</span>
-                  <span style={stats.clicker.totalDots >= 1000000000000 ? styles.nodeLabelCompleted : styles.nodeLabel}>1T Dots</span>
-                </div>
+                {[
+                  { dots: 1000, icon: '👆', label: '1K' },
+                  { dots: 1000000, icon: '💰', label: '1M' },
+                  { dots: 1000000000, icon: '🏦', label: '1B' },
+                  { dots: 1000000000000, icon: '💎', label: '1T' },
+                ].map((m, i, arr) => (
+                  <div key={m.dots} style={{ display: 'contents' }}>
+                    <div style={styles.milestoneNode}>
+                      <span style={stats.clicker.totalDots >= m.dots ? (m.dots >= 1000000000000 ? styles.nodeIconLegendaryCompleted : styles.nodeIconCompleted) : (m.dots >= 1000000000000 ? styles.nodeIconLegendary : styles.nodeIcon)}>{m.icon}</span>
+                      <span style={stats.clicker.totalDots >= m.dots ? styles.nodeLabelCompleted : styles.nodeLabel}>{m.label} Dots</span>
+                    </div>
+                    {i < arr.length - 1 && <div style={styles.milestoneLine}></div>}
+                  </div>
+                ))}
               </div>
               <div style={styles.prestigeTrack}>
                 <h3 style={styles.prestigeTrackH3}>Prestige Journey</h3>
@@ -1055,7 +1431,36 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Synergy Milestones */}
+            {/* Clicker Stat Bars */}
+            <div style={styles.milestoneSection}>
+              <h2 style={styles.milestoneSectionH2Clicker}>📊 Clicker Stats</h2>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '12px' }}>
+                {[
+                  { label: 'Total Dots Earned', value: stats.clicker.totalDots, max: Math.max(stats.clicker.totalDots, 1000000), color: '#00d9ff' },
+                  { label: 'Peak DPS', value: stats.clicker.highestDps, max: Math.max(stats.clicker.highestDps, 10000), color: '#2ecc71' },
+                  { label: 'Total Prestiges', value: stats.clicker.totalPrestiges, max: Math.max(stats.clicker.totalPrestiges, 50), color: '#f39c12' },
+                  { label: 'Buildings Purchased', value: stats.clicker.buildingsPurchased, max: Math.max(stats.clicker.buildingsPurchased, 200), color: '#9b59b6' },
+                ].map(stat => (
+                  <div key={stat.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#aab' }}>{stat.label}</span>
+                      <span style={{ fontSize: '0.8rem', color: stat.color, fontWeight: 700 }}>{formatNumber(stat.value)}</span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, (stat.value / stat.max) * 100)}%`, background: `linear-gradient(90deg, ${stat.color}, ${stat.color}88)`, borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {stats.clicker.totalPlaytime > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
+                  <span style={{ color: '#889', fontSize: '0.85rem' }}>Playtime</span>
+                  <span style={{ color: '#00d9ff', fontWeight: 700, fontSize: '0.95rem' }}>{formatTime(stats.clicker.totalPlaytime)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Synergy Overview */}
             <div style={styles.milestoneSection}>
               <h2 style={styles.milestoneSectionH2Synergy}>🔗 Cross-Game Synergy</h2>
               <div style={styles.synergyMeter}>
@@ -1076,120 +1481,28 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Recent Runs */}
-            {recentRuns.length > 0 && (
-              <div style={styles.milestoneSection}>
-                <h2 style={styles.milestoneSectionH2Recent}>📜 Recent DotSlayer Runs</h2>
-                <div style={styles.recentRuns}>
-                  {recentRuns.map((run, i) => (
-                    <div key={run.id || i} style={run.was_victory ? styles.runCardVictory : styles.runCard}>
-                      <div style={styles.runFloor}>Floor {run.floor_reached}</div>
-                      <div style={styles.runStats}>
-                        <span>💰 {formatNumber(run.score)}</span>
-                        <span>💀 {run.kills} kills</span>
-                        <span>⏱️ {formatTime(run.time_played / 60)}</span>
-                      </div>
-                      {run.was_victory && <span style={styles.victoryBadge}>🏆 VICTORY</span>}
+            {/* Challenge Mode Records */}
+            <div style={styles.milestoneSection}>
+              <h2 style={{ ...styles.milestoneSectionH2Clicker, color: '#e74c3c' }}>🏅 Challenge Records</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                {[
+                  { id: 'boss_rush', name: 'Boss Rush', icon: '👹', color: '#e74c3c' },
+                  { id: 'survival', name: 'Survival', icon: '💀', color: '#9b59b6' },
+                  { id: 'speed_run', name: 'Speed Run', icon: '⏱️', color: '#f39c12' },
+                  { id: 'hardcore', name: 'Hardcore', icon: '☠️', color: '#2c3e50' },
+                ].map(mode => {
+                  const record = (() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_challenge_modes') || '{}'); return d.records?.[mode.id] } catch { return null } })()
+                  return (
+                    <div key={mode.id} style={{ background: `${mode.color}10`, border: `1px solid ${mode.color}30`, borderRadius: '10px', padding: '12px', textAlign: 'center' as const }}>
+                      <span style={{ fontSize: '1.3rem' }}>{mode.icon}</span>
+                      <span style={{ display: 'block', color: mode.color, fontWeight: 700, fontSize: '0.85rem', marginTop: '4px' }}>{mode.name}</span>
+                      <span style={{ display: 'block', color: record ? '#ccc' : '#555', fontSize: '0.75rem', marginTop: '4px' }}>
+                        {record ? record.details : 'Not attempted'}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* INFINITE HORIZONS: Weapon Mastery Tab */}
-        {activeTab === 'mastery' && (
-          <div style={{ padding: '20px 0' }}>
-            <h2 style={{ textAlign: 'center', color: '#f39c12', marginBottom: '20px', fontSize: '1.3rem' }}>🔫 Weapon Mastery</h2>
-            <p style={{ textAlign: 'center', color: '#888', marginBottom: '20px', fontSize: '0.85rem' }}>
-              Kill enemies with each weapon to earn permanent damage bonuses that persist across runs!
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-              {['Pistol', 'Shotgun', 'SMG', 'Rifle', 'Sniper', 'Minigun', 'Rocket Launcher', 'Laser Rifle', 'Flamethrower', 'Rail Gun', 'Grenade Launcher'].map(weapon => {
-                const kills = (() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return d.kills?.[weapon] || 0 } catch { return 0 } })()
-                const ranks = [
-                  { name: 'Novice', req: 0, color: '#95a5a6' },
-                  { name: 'Apprentice', req: 100, color: '#2ecc71' },
-                  { name: 'Journeyman', req: 500, color: '#3498db' },
-                  { name: 'Expert', req: 2000, color: '#9b59b6' },
-                  { name: 'Master', req: 10000, color: '#f39c12' },
-                  { name: 'Grandmaster', req: 50000, color: '#ff0266' },
-                ]
-                let rank = ranks[0]
-                let nextRank = ranks[1]
-                for (let i = ranks.length - 1; i >= 0; i--) {
-                  if (kills >= ranks[i].req) { rank = ranks[i]; nextRank = ranks[i + 1] || null; break }
-                }
-                const progress = nextRank ? Math.min(100, ((kills - rank.req) / (nextRank.req - rank.req)) * 100) : 100
-
-                return (
-                  <div key={weapon} style={{
-                    background: 'rgba(20, 25, 40, 0.8)', borderRadius: '10px', padding: '12px 15px',
-                    border: `1px solid ${rank.color}40`,
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{weapon}</span>
-                      <span style={{ color: rank.color, fontWeight: 700, fontSize: '0.8rem' }}>{rank.name}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ color: '#888', fontSize: '0.75rem' }}>{kills.toLocaleString()} kills</span>
-                      {nextRank && <span style={{ color: '#666', fontSize: '0.7rem' }}>Next: {nextRank.req.toLocaleString()}</span>}
-                    </div>
-                    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${progress}%`, background: rank.color, borderRadius: '2px', transition: 'width 0.3s' }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* INFINITE HORIZONS: Challenge Records Tab */}
-        {activeTab === 'challenges' && (
-          <div style={{ padding: '20px 0' }}>
-            <h2 style={{ textAlign: 'center', color: '#00d9ff', marginBottom: '20px', fontSize: '1.3rem' }}>🏅 Challenge Records</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-              {[
-                { id: 'boss_rush', name: 'Boss Rush', icon: '👹', color: '#e74c3c', desc: 'Fight all 15 bosses' },
-                { id: 'survival', name: 'Survival', icon: '💀', color: '#9b59b6', desc: 'Survive as long as possible' },
-                { id: 'speed_run', name: 'Speed Run', icon: '⏱️', color: '#f39c12', desc: '50 floors in 30 minutes' },
-                { id: 'hardcore', name: 'Hardcore', icon: '☠️', color: '#2c3e50', desc: '1 HP, 10x rewards' },
-              ].map(mode => {
-                const record = (() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_challenge_modes') || '{}'); return d.records?.[mode.id] } catch { return null } })()
-                return (
-                  <div key={mode.id} style={{
-                    background: `linear-gradient(135deg, ${mode.color}15, ${mode.color}08)`,
-                    border: `1px solid ${mode.color}40`, borderRadius: '12px', padding: '15px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '1.5rem' }}>{mode.icon}</span>
-                      <div>
-                        <span style={{ display: 'block', color: mode.color, fontWeight: 700 }}>{mode.name}</span>
-                        <span style={{ display: 'block', color: '#888', fontSize: '0.75rem' }}>{mode.desc}</span>
-                      </div>
-                    </div>
-                    {record ? (
-                      <div style={{ color: '#ccc', fontSize: '0.85rem' }}>
-                        <div>Best: <span style={{ color: mode.color, fontWeight: 600 }}>{record.details}</span></div>
-                      </div>
-                    ) : (
-                      <div style={{ color: '#555', fontSize: '0.8rem', fontStyle: 'italic' }}>No attempts yet</div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Endless Mode Record */}
-            <div style={{
-              marginTop: '20px', background: 'linear-gradient(135deg, #ff026615, #ff026608)',
-              border: '1px solid #ff026640', borderRadius: '12px', padding: '15px', textAlign: 'center'
-            }}>
-              <span style={{ fontSize: '1.5rem' }}>🌌</span>
-              <h3 style={{ color: '#ff0266', fontWeight: 700, marginTop: '5px' }}>Endless Mode</h3>
-              <p style={{ color: '#888', fontSize: '0.8rem' }}>Best Floor: {(() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_endless_mode') || '{}'); return d.bestFloor || 0 } catch { return 0 } })()}</p>
             </div>
           </div>
         )}

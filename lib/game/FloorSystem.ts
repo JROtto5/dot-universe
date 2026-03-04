@@ -8,7 +8,7 @@ export interface FloorConfig {
   enemyTypes: EnemyType[]
   difficultyMultiplier: number
   itemDropChance: number
-  specialModifier?: 'boss_floor' | 'elite_floor' | 'treasure_floor'
+  specialModifier?: 'boss_floor' | 'elite_floor' | 'treasure_floor' | 'mini_boss_floor'
 }
 
 export class FloorManager {
@@ -157,7 +157,12 @@ export class FloorManager {
       return 'boss_floor'
     }
 
-    // Elite floor every 5 floors (but not boss floors)
+    // Mini-boss floors: 5, 15, 25, 35... (every 10 offset by 5)
+    if (floor >= 5 && floor % 10 === 5) {
+      return 'mini_boss_floor'
+    }
+
+    // Elite floor every 5 floors (but not boss or mini-boss floors)
     if (floor % 5 === 0) {
       return 'elite_floor'
     }

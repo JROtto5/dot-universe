@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/context/AuthContext'
 import { clickerSyncService, ClickerGameState } from '../../lib/supabase'
 import { crossGameSynergy } from '../../lib/game/CrossGameSynergy'
+import { getClickerDailyChallengeManager, ClickerDailyChallengeManager, ClickerChallengeType } from '../../lib/game/DailyChallenges'
 import Link from 'next/link'
 
 // ============= DUBSTEP MUSIC SYSTEM =============
@@ -902,6 +903,14 @@ export default function DotClicker() {
   const [saveMessage, setSaveMessage] = useState('')
   const [lastCloudSave, setLastCloudSave] = useState<number | null>(null)
   const [offlineEarningsInfo, setOfflineEarningsInfo] = useState<{amount: number, time: number} | null>(null)
+  // Cloud save indicator state
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'saved' | 'syncing' | 'local_only'>('local_only')
+  // Daily challenges state
+  const [dailyChallengeManager, setDailyChallengeManager] = useState<ClickerDailyChallengeManager | null>(null)
+  const [dailyChallengesOpen, setDailyChallengesOpen] = useState(false)
+  const [dailyChallengeInfo, setDailyChallengeInfo] = useState<ReturnType<ClickerDailyChallengeManager['getChallengeInfo']>>([])
+  const [dailyChallengeStreak, setDailyChallengeStreak] = useState(0)
+  const [dailyChallengeResetTime, setDailyChallengeResetTime] = useState('')
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null)
   const comboTimerRef = useRef<NodeJS.Timeout | null>(null)
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -1061,6 +1070,41 @@ export default function DotClicker() {
     initializeGame()
   }, [user, loading, router])
 
+  // Initialize daily challenges and cloud sync indicator
+  useEffect(() => {
+    if (!gameState) return
+    // Initialize daily challenge manager
+    const dcm = getClickerDailyChallengeManager()
+    dcm.onComplete((challenge) => {
+      setNotification(`Daily Challenge Complete: ${challenge.name}!`)
+      setTimeout(() => setNotification(null), 3000)
+    })
+    setDailyChallengeManager(dcm)
+    setDailyChallengeInfo(dcm.getChallengeInfo())
+    setDailyChallengeStreak(dcm.getStreak())
+    setDailyChallengeResetTime(dcm.getTimeUntilReset())
+    // Update reset timer every minute
+    const resetInterval = setInterval(() => {
+      setDailyChallengeResetTime(dcm.getTimeUntilReset())
+      setDailyChallengeInfo(dcm.getChallengeInfo())
+    }, 60000)
+    // Set initial cloud sync status
+    if (user && lastCloudSave) {
+      setCloudSyncStatus('saved')
+    } else if (!user) {
+      setCloudSyncStatus('local_only')
+    }
+    return () => clearInterval(resetInterval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState !== null])
+
+  // Helper to update daily challenge progress and refresh UI
+  const updateDailyProgress = useCallback((type: ClickerChallengeType, amount: number) => {
+    if (!dailyChallengeManager) return
+    dailyChallengeManager.updateProgress(type, amount)
+    setDailyChallengeInfo(dailyChallengeManager.getChallengeInfo())
+  }, [dailyChallengeManager])
+
   function getInitialState(): GameState {
     return {
       dots: 0,
@@ -1132,6 +1176,7 @@ export default function DotClicker() {
       setSaveStatus('saving')
       setSaveMessage('Saving to cloud...')
     }
+    setCloudSyncStatus('syncing')
 
     try {
       // Save locally first
@@ -1177,17 +1222,20 @@ export default function DotClicker() {
 
       if (result.success) {
         setLastCloudSave(saveTime)
+        setCloudSyncStatus('saved')
         if (showModal) {
           setSaveStatus('success')
           setSaveMessage('Game saved to cloud!')
         }
       } else {
+        setCloudSyncStatus('local_only')
         if (showModal) {
           setSaveStatus('error')
           setSaveMessage(result.message)
         }
       }
     } catch (error: any) {
+      setCloudSyncStatus('local_only')
       if (showModal) {
         setSaveStatus('error')
         setSaveMessage(`Save failed: ${error.message}`)
@@ -1283,6 +1331,21 @@ export default function DotClicker() {
     // Cloud save every 60 seconds (auto, no modal)
     cloudSaveTimerRef.current = setInterval(() => saveGameCloud(false), 60000)
 
+    // Daily challenge: track DPS milestones every 5 seconds
+    const dpsTrackInterval = setInterval(() => {
+      setGameState(prev => {
+        if (prev && dailyChallengeManager) {
+          const currentDps = prev.dotsPerSecond
+          const dpsInfo = dailyChallengeManager.getChallengeInfo().find(d => d.challenge.type === 'dps')
+          if (dpsInfo && !dpsInfo.completed && currentDps > dpsInfo.progress) {
+            dailyChallengeManager.updateProgress('dps', currentDps - dpsInfo.progress)
+            setDailyChallengeInfo(dailyChallengeManager.getChallengeInfo())
+          }
+        }
+        return prev
+      })
+    }, 5000)
+
     const goldenInterval = setInterval(() => {
       // Golden Rain (Tier 5): 3x golden dot spawn rate
       const hasGoldenRain = gameState?.prestigeUpgrades?.some(u => u.effect === 'goldenRain' && u.purchased)
@@ -1324,6 +1387,7 @@ export default function DotClicker() {
       if (cloudSaveTimerRef.current) clearInterval(cloudSaveTimerRef.current)
       clearInterval(goldenInterval)
       clearInterval(frenzyInterval)
+      clearInterval(dpsTrackInterval)
       dubstepPlayer.cleanup()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1431,7 +1495,15 @@ export default function DotClicker() {
         maxCombo: Math.max(prev.maxCombo, newCombo)
       }
     })
-  }, [gameState, frenzyMode, musicStarted])
+
+    // Daily challenge: track clicks and combo
+    updateDailyProgress('clicks', 1)
+    updateDailyProgress('dots_earned', totalClickGain)
+    if (frenzyMode) updateDailyProgress('click_frenzy', 1)
+    if (gameState.combo + 1 > (dailyChallengeInfo.find(d => d.challenge.type === 'combo')?.progress || 0)) {
+      updateDailyProgress('combo', gameState.combo + 1 - (dailyChallengeInfo.find(d => d.challenge.type === 'combo')?.progress || 0))
+    }
+  }, [gameState, frenzyMode, musicStarted, updateDailyProgress, dailyChallengeInfo])
 
   const handleGoldenClick = useCallback(() => {
     if (!gameState || !goldenDot) return
@@ -1450,10 +1522,13 @@ export default function DotClicker() {
       totalGoldenClicks: prev.totalGoldenClicks + 1
     } : prev)
 
-    setNotification(`🌟 Golden Dot! +${formatNumber(bonus)} dots!`)
+    setNotification(`Golden Dot! +${formatNumber(bonus)} dots!`)
     setTimeout(() => setNotification(null), 3000)
     setGoldenDot(null)
-  }, [gameState, goldenDot])
+
+    // Daily challenge: golden dots
+    updateDailyProgress('golden_dots', 1)
+  }, [gameState, goldenDot, updateDailyProgress])
 
   const buyBuilding = useCallback((buildingId: string, amount: number = 1) => {
     if (!gameState) return
@@ -1482,7 +1557,10 @@ export default function DotClicker() {
         )
       }
     })
-  }, [gameState])
+
+    // Daily challenge: buildings purchased
+    updateDailyProgress('buildings', amount)
+  }, [gameState, updateDailyProgress])
 
   const buyUpgrade = useCallback((upgradeId: string) => {
     if (!gameState) return
@@ -1514,7 +1592,10 @@ export default function DotClicker() {
 
       return newState
     })
-  }, [gameState])
+
+    // Daily challenge: upgrades purchased
+    updateDailyProgress('upgrades', 1)
+  }, [gameState, updateDailyProgress])
 
   const handlePrestige = useCallback(() => {
     if (!gameState) return
@@ -1568,9 +1649,12 @@ export default function DotClicker() {
 
     const rpGained = 1 + Math.floor(Math.log10(Math.max(1, gameState.totalDots / 1000000000000)))
     setShowPrestige(false)
-    setNotification(`⭐ Prestiged! +${newPrestigePoints} points, +${rpGained} RP. New multiplier: ${prestigeMultiplier.toFixed(2)}x`)
+    setNotification(`Prestiged! +${newPrestigePoints} points, +${rpGained} RP. New multiplier: ${prestigeMultiplier.toFixed(2)}x`)
     setTimeout(() => setNotification(null), 5000)
-  }, [gameState])
+
+    // Daily challenge: prestige
+    updateDailyProgress('prestige', 1)
+  }, [gameState, updateDailyProgress])
 
   // ASCENSION: Reset prestige points but gain permanent ascension bonuses
   const handleAscension = useCallback(() => {
@@ -1821,6 +1905,11 @@ export default function DotClicker() {
             {musicMuted ? '🔇' : '🎵'}
           </button>
           <span className="prestige-display">⭐ {gameState.prestigePoints}</span>
+          <span className={`cloud-sync-indicator ${cloudSyncStatus}`}>
+            {cloudSyncStatus === 'saved' && 'Cloud Saved \u2713'}
+            {cloudSyncStatus === 'syncing' && 'Syncing...'}
+            {cloudSyncStatus === 'local_only' && 'Local Only'}
+          </span>
         </div>
       </header>
 
@@ -1844,6 +1933,56 @@ export default function DotClicker() {
           </div>
         )}
       </div>
+
+      {/* Daily Challenges Panel */}
+      {dailyChallengeManager && (
+        <div className="daily-challenges-panel">
+          <div className="daily-challenges-header" onClick={() => setDailyChallengesOpen(!dailyChallengesOpen)}>
+            <span className="daily-title">Daily Challenges</span>
+            <span className="daily-meta">
+              {dailyChallengeStreak > 0 && <span className="daily-streak">Streak: {dailyChallengeStreak}</span>}
+              <span className="daily-reset">Resets: {dailyChallengeResetTime}</span>
+              <span className="daily-toggle">{dailyChallengesOpen ? '\u25B2' : '\u25BC'}</span>
+            </span>
+          </div>
+          {dailyChallengesOpen && (
+            <div className="daily-challenges-list">
+              {dailyChallengeInfo.map(({ challenge, progress, target, percentage, completed, claimed }) => (
+                <div key={challenge.id} className={`daily-challenge-item ${completed ? 'completed' : ''} ${claimed ? 'claimed' : ''}`}>
+                  <div className="dc-header">
+                    <span className="dc-icon">{challenge.icon}</span>
+                    <div className="dc-info">
+                      <span className="dc-name">{challenge.name}</span>
+                      <span className="dc-desc">{challenge.description}</span>
+                    </div>
+                    <div className="dc-reward">
+                      {!claimed && completed ? (
+                        <button className="dc-claim-btn" onClick={() => {
+                          const reward = dailyChallengeManager.claimReward(challenge.id)
+                          if (reward) {
+                            setGameState(prev => prev ? { ...prev, dots: prev.dots + reward.dots, totalDots: prev.totalDots + reward.dots } : prev)
+                            setDailyChallengeInfo(dailyChallengeManager.getChallengeInfo())
+                            setNotification(`Claimed ${formatNumber(reward.dots)} dots!`)
+                            setTimeout(() => setNotification(null), 3000)
+                          }
+                        }}>Claim</button>
+                      ) : claimed ? (
+                        <span className="dc-claimed-badge">Claimed</span>
+                      ) : (
+                        <span className="dc-reward-text">+{formatNumber(challenge.reward.dots)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="dc-progress-bar">
+                    <div className="dc-progress-fill" style={{ width: `${percentage}%`, background: completed ? '#2ecc71' : challenge.difficulty === 'easy' ? '#3498db' : challenge.difficulty === 'medium' ? '#f39c12' : '#e74c3c' }} />
+                  </div>
+                  <span className="dc-progress-text">{formatNumber(progress)}/{formatNumber(target)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Click Area */}
       <div className="click-area" onClick={handleClick}>
@@ -2806,6 +2945,78 @@ export default function DotClicker() {
         .prestige-btn { background: rgba(155, 89, 182, 0.2); color: #9b59b6; }
         .prestige-btn.available { background: rgba(155, 89, 182, 0.4); animation: pulse 1s ease-in-out infinite; }
         .save-btn { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+
+        /* Cloud Sync Indicator */
+        .cloud-sync-indicator {
+          font-size: 0.7rem;
+          padding: 3px 8px;
+          border-radius: 10px;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
+        .cloud-sync-indicator.saved { color: #2ecc71; background: rgba(46, 204, 113, 0.15); border: 1px solid rgba(46, 204, 113, 0.3); }
+        .cloud-sync-indicator.syncing { color: #f39c12; background: rgba(243, 156, 18, 0.15); border: 1px solid rgba(243, 156, 18, 0.3); animation: pulse 1s ease-in-out infinite; }
+        .cloud-sync-indicator.local_only { color: #95a5a6; background: rgba(149, 165, 166, 0.15); border: 1px solid rgba(149, 165, 166, 0.3); }
+
+        /* Daily Challenges Panel */
+        .daily-challenges-panel {
+          margin: 0 15px 8px;
+          background: linear-gradient(145deg, rgba(20, 25, 40, 0.9), rgba(15, 20, 35, 0.95));
+          border-radius: 10px;
+          border: 1px solid rgba(243, 156, 18, 0.2);
+          overflow: hidden;
+        }
+        .daily-challenges-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px 15px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .daily-challenges-header:hover { background: rgba(255, 255, 255, 0.03); }
+        .daily-title { color: #f39c12; font-weight: 700; font-size: 0.85rem; letter-spacing: 1px; }
+        .daily-meta { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; }
+        .daily-streak { color: #2ecc71; font-weight: 600; }
+        .daily-reset { color: #667; }
+        .daily-toggle { color: #888; font-size: 0.6rem; }
+        .daily-challenges-list { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+        .daily-challenge-item {
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 8px;
+          padding: 10px 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .daily-challenge-item.completed { border-color: rgba(46, 204, 113, 0.3); }
+        .daily-challenge-item.claimed { opacity: 0.6; }
+        .dc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .dc-icon { font-size: 1.2rem; }
+        .dc-info { flex: 1; }
+        .dc-name { display: block; color: #ddd; font-weight: 600; font-size: 0.85rem; }
+        .dc-desc { display: block; color: #667; font-size: 0.7rem; }
+        .dc-reward-text { color: #f39c12; font-size: 0.75rem; font-weight: 600; }
+        .dc-claim-btn {
+          padding: 4px 12px;
+          background: linear-gradient(135deg, #27ae60, #2ecc71);
+          border: none;
+          border-radius: 12px;
+          color: white;
+          font-weight: 700;
+          font-size: 0.75rem;
+          cursor: pointer;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        .dc-claimed-badge { color: #2ecc71; font-size: 0.75rem; font-weight: 600; }
+        .dc-progress-bar {
+          width: 100%;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+          overflow: hidden;
+          margin-bottom: 3px;
+        }
+        .dc-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+        .dc-progress-text { color: #667; font-size: 0.65rem; }
 
         .notification {
           position: fixed;

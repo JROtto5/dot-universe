@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/context/AuthContext'
 import { leaderboardService, LeaderboardEntry } from '../../lib/supabase'
 import { supabase } from '../../lib/supabase/client'
+import { getDailyChallengeManager, getClickerDailyChallengeManager } from '../../lib/game/DailyChallenges'
+import { getWeeklyModifier, getWeeklyModifierTimeRemaining, getSeasonPassManager } from '../../lib/game/SeasonalEvents'
+import { prestigeSystem } from '../../lib/game/PrestigeSystem'
 
 interface ClickerLeaderboardEntry {
   user_id: string
@@ -55,6 +58,18 @@ export default function GameHub() {
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmText, setResetConfirmText] = useState('')
   const [resetStatus, setResetStatus] = useState<'idle' | 'resetting' | 'success' | 'error'>('idle')
+
+  // CONVERGENCE: Season & Prestige state
+  const [prestigeLevel, setPrestigeLevel] = useState(0)
+  const [ngPlusTier, setNGPlusTier] = useState(0)
+  const [seasonName, setSeasonName] = useState('')
+  const [seasonTimeRemaining, setSeasonTimeRemaining] = useState('')
+  const [seasonTier, setSeasonTier] = useState(0)
+  const [seasonProgress, setSeasonProgress] = useState(0)
+  const [weeklyModName, setWeeklyModName] = useState('')
+  const [weeklyModDesc, setWeeklyModDesc] = useState('')
+  const [weeklyModIcon, setWeeklyModIcon] = useState('')
+  const [weeklyModTimeLeft, setWeeklyModTimeLeft] = useState('')
 
   useEffect(() => {
     if (!loading && !user) {
@@ -208,6 +223,33 @@ export default function GameHub() {
     return () => clearInterval(interval)
   }, [])
 
+  // CONVERGENCE: Load prestige & season data
+  useEffect(() => {
+    const loadConvergenceData = () => {
+      try {
+        setPrestigeLevel(prestigeSystem.getPrestigeLevel())
+        setNGPlusTier(prestigeSystem.getNGPlusTier())
+      } catch { /* not initialized */ }
+      try {
+        const spm = getSeasonPassManager()
+        setSeasonName(spm.getCurrentSeasonName())
+        setSeasonTimeRemaining(spm.getTimeRemaining())
+        setSeasonTier(spm.getCurrentTier())
+        setSeasonProgress(spm.getProgressToNextTier())
+      } catch { /* not initialized */ }
+      try {
+        const wm = getWeeklyModifier()
+        setWeeklyModName(wm.name)
+        setWeeklyModDesc(wm.description)
+        setWeeklyModIcon(wm.icon)
+        setWeeklyModTimeLeft(getWeeklyModifierTimeRemaining())
+      } catch { /* not initialized */ }
+    }
+    loadConvergenceData()
+    const interval = setInterval(loadConvergenceData, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   const handleNav = (path: string) => router.push(path)
 
   if (loading) {
@@ -358,6 +400,92 @@ export default function GameHub() {
           borderRadius: '2px',
         }} />
       </header>
+
+      {/* CONVERGENCE: Current Season Banner */}
+      <section style={{ maxWidth: '700px', margin: '0 auto 20px', padding: '0 20px', position: 'relative', zIndex: 10 }}>
+        <div style={{
+          background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+          borderRadius: '16px', padding: '20px 25px',
+          border: '1px solid rgba(155, 89, 182, 0.25)',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          {/* Season Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.5rem' }}>🏅</span>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.65rem', color: '#889', letterSpacing: '2px', textTransform: 'uppercase' as const }}>Current Season</span>
+                <span style={{
+                  fontSize: '1.2rem', fontWeight: 800,
+                  background: 'linear-gradient(90deg, #9b59b6, #e74c3c, #f39c12)',
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                }}>{seasonName || 'Loading...'}</span>
+              </div>
+            </div>
+            <span style={{ color: '#778', fontSize: '0.8rem' }}>{seasonTimeRemaining} left</span>
+          </div>
+
+          {/* Season Pass Tier & Progress */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.75rem', color: '#aab' }}>Season Pass Tier</span>
+              <span style={{ fontSize: '0.75rem', color: '#9b59b6', fontWeight: 700 }}>Tier {seasonTier}/30</span>
+            </div>
+            <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${seasonProgress * 100}%`, background: 'linear-gradient(90deg, #9b59b6, #e74c3c)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+            </div>
+          </div>
+
+          {/* Prestige & NG+ display + Weekly Modifier */}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const }}>
+            {/* Prestige Badge */}
+            <div style={{
+              flex: 1, minWidth: '140px',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.12), rgba(241, 196, 15, 0.06))',
+              border: '1px solid rgba(243, 156, 18, 0.25)',
+              borderRadius: '10px',
+            }}>
+              <span style={{ display: 'block', fontSize: '0.65rem', color: '#889', marginBottom: '4px' }}>Prestige</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#f1c40f', fontSize: '1.1rem', fontWeight: 800 }}>
+                  {'★'.repeat(Math.min(prestigeLevel, 5))}{prestigeLevel > 5 ? `+${prestigeLevel - 5}` : ''} {prestigeLevel > 0 ? `P${prestigeLevel}` : 'None'}
+                </span>
+                {ngPlusTier > 0 && (
+                  <span style={{
+                    color: '#ff0266', fontSize: '0.75rem', fontWeight: 700,
+                    background: 'rgba(255, 2, 102, 0.15)',
+                    padding: '2px 8px', borderRadius: '10px',
+                  }}>
+                    NG+{ngPlusTier}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Weekly Modifier */}
+            <div style={{
+              flex: 1, minWidth: '140px',
+              padding: '10px 14px',
+              background: 'linear-gradient(135deg, rgba(0, 217, 255, 0.08), rgba(0, 150, 255, 0.04))',
+              border: '1px solid rgba(0, 217, 255, 0.2)',
+              borderRadius: '10px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.65rem', color: '#889' }}>Weekly Modifier</span>
+                <span style={{ fontSize: '0.6rem', color: '#556' }}>{weeklyModTimeLeft}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '1.1rem' }}>{weeklyModIcon}</span>
+                <div>
+                  <span style={{ display: 'block', color: '#00d9ff', fontWeight: 700, fontSize: '0.85rem' }}>{weeklyModName || 'Loading...'}</span>
+                  <span style={{ display: 'block', color: '#667', fontSize: '0.7rem' }}>{weeklyModDesc}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Game Cards */}
       <main style={{
@@ -541,86 +669,185 @@ export default function GameHub() {
         </div>
       </main>
 
-      {/* Synergy Section */}
+      {/* Universe Level Banner */}
       <section style={{ maxWidth: '700px', margin: '40px auto', padding: '0 20px', position: 'relative', zIndex: 10 }}>
         <div style={{
-          background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.8), rgba(15, 20, 35, 0.9))',
-          borderRadius: '20px',
-          padding: '30px',
-          border: '1px solid rgba(243, 156, 18, 0.15)',
+          background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+          borderRadius: '20px', padding: '25px 30px',
+          border: '1px solid rgba(243, 156, 18, 0.2)',
+          textAlign: 'center',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '15px' }}>
-            <span style={{ fontSize: '1.5rem' }}>🔗</span>
-            <h3 style={{
-              fontSize: '1.3rem',
-              fontWeight: 700,
-              letterSpacing: '3px',
-              background: 'linear-gradient(90deg, #f39c12, #f1c40f)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}>CROSS-GAME SYNERGY</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '2rem' }}>🌌</span>
+            <div>
+              <span style={{ display: 'block', fontSize: '0.7rem', color: '#889', letterSpacing: '3px', textTransform: 'uppercase' as const }}>Universe Level</span>
+              <span style={{
+                fontSize: '2.5rem', fontWeight: 900, lineHeight: 1,
+                background: 'linear-gradient(135deg, #f39c12, #f1c40f, #ff6b00)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>{(() => { const level = Math.floor(Math.sqrt((synergyStats.slayerFloorsCleared + synergyStats.clickerPrestiges * 5) / 10)); return level; })()}</span>
+            </div>
           </div>
-
-          <p style={{ color: '#889', fontSize: '0.9rem', lineHeight: 1.6, textAlign: 'center', marginBottom: '25px' }}>
-            Play both games to unlock exclusive bonuses! DotSlayer floors boost Clicker <span style={{ color: '#ff6b00', fontWeight: 600 }}>(+1% per floor)</span>,
-            Clicker prestiges power up Slayer <span style={{ color: '#00d9ff', fontWeight: 600 }}>(+5% per prestige)</span>!
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+          {/* XP Bar */}
+          {(() => {
+            const rawScore = synergyStats.slayerFloorsCleared + synergyStats.clickerPrestiges * 5
+            const level = Math.floor(Math.sqrt(rawScore / 10))
+            const currentXP = rawScore - (level * level * 10)
+            const nextXP = ((level + 1) * (level + 1) * 10) - (level * level * 10)
+            const pct = Math.min(100, (currentXP / Math.max(1, nextXP)) * 100)
+            return (
+              <div style={{ marginBottom: '15px' }}>
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #f39c12, #f1c40f)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#667', marginTop: '4px', display: 'block' }}>{currentXP}/{nextXP} XP to next level</span>
+              </div>
+            )
+          })()}
+          {/* Synergy Bonuses */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' as const }}>
             {[
-              { icon: '⚔', label: 'Slayer Best Floor', value: synergyStats.slayerHighestFloor, color: '#ff6b00', fill: Math.min(synergyStats.slayerHighestFloor, 100) },
-              { icon: '●', label: 'Clicker Prestiges', value: synergyStats.clickerPrestiges, color: '#00d9ff', fill: Math.min(synergyStats.clickerPrestiges * 10, 100) },
-              { icon: '✨', label: 'Total Synergy Bonus', value: `+${synergyStats.synergyBonus}%`, color: '#2ecc71', isTotal: true },
-            ].map((stat) => (
-              <div key={stat.label} style={{
-                textAlign: 'center',
-                padding: '15px',
-                background: stat.isTotal ? 'linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(39, 174, 96, 0.05))' : 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '12px',
-                border: stat.isTotal ? '1px solid rgba(46, 204, 113, 0.2)' : 'none',
-              }}>
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 10px',
-                  fontSize: '1rem',
-                  background: `linear-gradient(135deg, ${stat.color}33, ${stat.color}22)`,
-                  color: stat.color,
-                  border: `1px solid ${stat.color}55`,
-                }}>{stat.icon}</div>
-                <span style={{ display: 'block', fontSize: '0.75rem', color: '#667', marginBottom: '5px' }}>{stat.label}</span>
-                <span style={{ fontSize: '1.6rem', fontWeight: 800, color: stat.color }}>{stat.value}</span>
-                {stat.fill !== undefined && (
-                  <div style={{ width: '100%', height: '4px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '2px', marginTop: '8px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${stat.fill}%`, background: `linear-gradient(90deg, ${stat.color}, ${stat.color}aa)`, borderRadius: '2px', transition: 'width 0.5s ease' }} />
-                  </div>
-                )}
+              { label: 'Slayer Bonus', value: `+${synergyStats.clickerPrestiges * 5}%`, color: '#ff6b00', desc: 'from Clicker prestiges' },
+              { label: 'Clicker Bonus', value: `+${synergyStats.slayerFloorsCleared}%`, color: '#00d9ff', desc: 'from Slayer floors' },
+              { label: 'Total Synergy', value: `+${synergyStats.synergyBonus}%`, color: '#2ecc71', desc: 'combined power' },
+            ].map(b => (
+              <div key={b.label} style={{ padding: '8px 16px', background: `${b.color}10`, borderRadius: '10px', border: `1px solid ${b.color}30` }}>
+                <span style={{ display: 'block', fontSize: '0.65rem', color: '#778' }}>{b.label}</span>
+                <span style={{ display: 'block', fontSize: '1.3rem', fontWeight: 800, color: b.color }}>{b.value}</span>
+                <span style={{ display: 'block', fontSize: '0.6rem', color: '#556' }}>{b.desc}</span>
               </div>
             ))}
           </div>
-
           {synergyStats.slayerGamesWon > 0 && (
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginTop: '20px',
-              padding: '12px 24px',
-              background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(241, 196, 15, 0.1))',
-              border: '1px solid rgba(243, 156, 18, 0.3)',
-              borderRadius: '30px',
-              color: '#f1c40f',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-            }}>
-              <span>🏆</span> DotSlayer Champion x{synergyStats.slayerGamesWon}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '15px', padding: '8px 20px', background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.12), rgba(241, 196, 15, 0.08))', border: '1px solid rgba(243, 156, 18, 0.25)', borderRadius: '20px', color: '#f1c40f', fontWeight: 600, fontSize: '0.85rem' }}>
+              <span>🏆</span> Champion x{synergyStats.slayerGamesWon}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Dual Progress Cards */}
+      <section style={{ maxWidth: '700px', margin: '20px auto', padding: '0 20px', position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+          {/* DotSlayer Progress Card */}
+          <div style={{
+            background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+            borderRadius: '16px', padding: '20px',
+            border: '1px solid rgba(255, 107, 0, 0.15)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '1.2rem' }}>⚔️</span>
+              <span style={{ color: '#ff6b00', fontWeight: 700, fontSize: '0.95rem', letterSpacing: '1px' }}>DOTSLAYER</span>
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#889' }}>Floor Progress</span>
+                <span style={{ fontSize: '0.75rem', color: '#ff6b00', fontWeight: 600 }}>{synergyStats.slayerHighestFloor}/150</span>
+              </div>
+              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.min(100, (synergyStats.slayerHighestFloor / 150) * 100)}%`, background: 'linear-gradient(90deg, #ff6b00, #ff4400)', borderRadius: '3px', transition: 'width 0.5s ease' }} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#ff6b00' }}>{synergyStats.slayerHighestFloor}</span>
+                <span style={{ display: 'block', fontSize: '0.65rem', color: '#667' }}>Best Floor</span>
+              </div>
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#2ecc71' }}>{synergyStats.slayerGamesWon}</span>
+                <span style={{ display: 'block', fontSize: '0.65rem', color: '#667' }}>Victories</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dot Clicker Progress Card */}
+          <div style={{
+            background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+            borderRadius: '16px', padding: '20px',
+            border: '1px solid rgba(0, 217, 255, 0.15)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '1.2rem', color: '#00d9ff' }}>●</span>
+              <span style={{ color: '#00d9ff', fontWeight: 700, fontSize: '0.95rem', letterSpacing: '1px' }}>DOT CLICKER</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#00d9ff' }}>{synergyStats.clickerPrestiges}</span>
+                <span style={{ display: 'block', fontSize: '0.65rem', color: '#667' }}>Prestiges</span>
+              </div>
+              <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                <span style={{ display: 'block', fontSize: '1.2rem', fontWeight: 800, color: '#f39c12' }}>{formatNumber(synergyStats.clickerTotalDots)}</span>
+                <span style={{ display: 'block', fontSize: '0.65rem', color: '#667' }}>Total Dots</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Active Daily Challenges */}
+      <section style={{ maxWidth: '700px', margin: '20px auto', padding: '0 20px', position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+          {/* Slayer Daily Challenges */}
+          {(() => {
+            try {
+              const slayerDCM = getDailyChallengeManager()
+              const slayerInfo = slayerDCM.getChallengeInfo()
+              return (
+                <div style={{
+                  background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+                  borderRadius: '16px', padding: '18px',
+                  border: '1px solid rgba(255, 107, 0, 0.12)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ color: '#ff6b00', fontWeight: 700, fontSize: '0.85rem' }}>⚔️ Slayer Dailies</span>
+                    <span style={{ color: '#556', fontSize: '0.7rem' }}>{slayerDCM.getTimeUntilReset()}</span>
+                  </div>
+                  {slayerInfo.length > 0 ? slayerInfo.map(({ challenge, progress, target, percentage, completed }) => (
+                    <div key={challenge.id} style={{ marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                        <span style={{ fontSize: '0.75rem', color: completed ? '#2ecc71' : '#aab' }}>{challenge.icon} {challenge.name}</span>
+                        <span style={{ fontSize: '0.65rem', color: '#667' }}>{Math.floor(progress)}/{target}</span>
+                      </div>
+                      <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${percentage}%`, background: completed ? '#2ecc71' : '#ff6b00', borderRadius: '2px', transition: 'width 0.3s ease' }} />
+                      </div>
+                    </div>
+                  )) : <span style={{ color: '#556', fontSize: '0.8rem' }}>Play to load challenges</span>}
+                </div>
+              )
+            } catch { return <div style={{ background: 'rgba(20, 25, 40, 0.85)', borderRadius: '16px', padding: '18px', border: '1px solid rgba(255, 107, 0, 0.12)' }}><span style={{ color: '#556', fontSize: '0.8rem' }}>Play DotSlayer for dailies</span></div> }
+          })()}
+
+          {/* Clicker Daily Challenges */}
+          {(() => {
+            try {
+              const clickerDCM = getClickerDailyChallengeManager()
+              const clickerInfo = clickerDCM.getChallengeInfo()
+              return (
+                <div style={{
+                  background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.85), rgba(15, 20, 35, 0.95))',
+                  borderRadius: '16px', padding: '18px',
+                  border: '1px solid rgba(0, 217, 255, 0.12)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ color: '#00d9ff', fontWeight: 700, fontSize: '0.85rem' }}>● Clicker Dailies</span>
+                    <span style={{ color: '#556', fontSize: '0.7rem' }}>{clickerDCM.getTimeUntilReset()}</span>
+                  </div>
+                  {clickerInfo.length > 0 ? clickerInfo.map(({ challenge, progress, target, percentage, completed }) => (
+                    <div key={challenge.id} style={{ marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                        <span style={{ fontSize: '0.75rem', color: completed ? '#2ecc71' : '#aab' }}>{challenge.icon} {challenge.name}</span>
+                        <span style={{ fontSize: '0.65rem', color: '#667' }}>{Math.floor(progress)}/{target}</span>
+                      </div>
+                      <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${percentage}%`, background: completed ? '#2ecc71' : '#00d9ff', borderRadius: '2px', transition: 'width 0.3s ease' }} />
+                      </div>
+                    </div>
+                  )) : <span style={{ color: '#556', fontSize: '0.8rem' }}>Play to load challenges</span>}
+                </div>
+              )
+            } catch { return <div style={{ background: 'rgba(20, 25, 40, 0.85)', borderRadius: '16px', padding: '18px', border: '1px solid rgba(0, 217, 255, 0.12)' }}><span style={{ color: '#556', fontSize: '0.8rem' }}>Play Dot Clicker for dailies</span></div> }
+          })()}
         </div>
       </section>
 
@@ -724,8 +951,26 @@ export default function GameHub() {
                   <span style={{ fontSize: '1.1rem', width: '35px', textAlign: 'center' }}>
                     {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                   </span>
-                  <span style={{ flex: 1, fontWeight: 600, color: '#ddd' }}>
+                  <span style={{ flex: 1, fontWeight: 600, color: '#ddd', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {activeLeaderboard === 'slayer' ? (entry as LeaderboardEntry).display_name : (entry as ClickerLeaderboardEntry).display_name}
+                    {activeLeaderboard === 'slayer' && (entry as LeaderboardEntry).run_data?.prestigeLevel > 0 && (
+                      <span style={{
+                        color: '#f1c40f', fontSize: '0.7rem', fontWeight: 700,
+                        background: 'rgba(243, 156, 18, 0.15)',
+                        padding: '1px 6px', borderRadius: '8px',
+                      }}>
+                        {'★'.repeat(Math.min((entry as LeaderboardEntry).run_data?.prestigeLevel || 0, 5))}
+                      </span>
+                    )}
+                    {activeLeaderboard === 'slayer' && (entry as LeaderboardEntry).run_data?.ngPlusTier > 0 && (
+                      <span style={{
+                        color: '#ff0266', fontSize: '0.6rem', fontWeight: 700,
+                        background: 'rgba(255, 2, 102, 0.12)',
+                        padding: '1px 5px', borderRadius: '6px',
+                      }}>
+                        NG+{(entry as LeaderboardEntry).run_data?.ngPlusTier}
+                      </span>
+                    )}
                   </span>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                     {activeLeaderboard === 'slayer' ? (

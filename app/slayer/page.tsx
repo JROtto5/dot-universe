@@ -6,6 +6,7 @@ import Script from 'next/script'
 import Link from 'next/link'
 import { useAuth } from '../../lib/context/AuthContext'
 import { useRouter } from 'next/navigation'
+import { prestigeSystem } from '../../lib/game/PrestigeSystem'
 
 // Dynamically import Phaser to avoid SSR issues
 const GameWrapper = dynamic(() => import('../../lib/game/GameWrapper'), {
@@ -55,8 +56,20 @@ export default function Home() {
   const [activeWeaponSlot, setActiveWeaponSlot] = useState(0)
   const [classWeapons, setClassWeapons] = useState<number[]>([])
 
+  // CONVERGENCE: Prestige info for HUD
+  const [prestigeLevel, setPrestigeLevel] = useState(0)
+  const [ngPlusTier, setNGPlusTier] = useState(0)
+
   // Weapon names for display
   const WEAPON_NAMES = ['Pistol', 'SMG', 'Shotgun', 'Sniper', 'Laser', 'Rocket', 'Minigun', 'Plasma']
+
+  // Load prestige data for HUD display
+  useEffect(() => {
+    try {
+      setPrestigeLevel(prestigeSystem.getPrestigeLevel())
+      setNGPlusTier(prestigeSystem.getNGPlusTier())
+    } catch { /* prestige system not initialized yet */ }
+  }, [])
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -171,6 +184,32 @@ export default function Home() {
       <div id="hud">
         {/* Hub Button */}
         <Link href="/hub" id="hub-btn">← Hub</Link>
+
+        {/* Prestige Badge */}
+        {prestigeLevel > 0 && (
+          <div style={{
+            position: 'absolute', top: '10px', left: '90px',
+            display: 'flex', alignItems: 'center', gap: '6px',
+            padding: '4px 10px',
+            background: 'linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(241, 196, 15, 0.1))',
+            border: '1px solid rgba(243, 156, 18, 0.4)',
+            borderRadius: '12px',
+            zIndex: 100,
+          }}>
+            <span style={{ color: '#f1c40f', fontSize: '12px', fontWeight: 700 }}>
+              {'★'.repeat(Math.min(prestigeLevel, 5))} P{prestigeLevel}
+            </span>
+            {ngPlusTier > 0 && (
+              <span style={{
+                color: '#ff0266', fontSize: '10px', fontWeight: 700,
+                background: 'rgba(255, 2, 102, 0.15)',
+                padding: '1px 6px', borderRadius: '8px',
+              }}>
+                NG+{ngPlusTier}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div id="stats">

@@ -23,6 +23,31 @@ export const WEAPON_TYPES: WeaponType[] = [
   { name: 'Grenade Launcher', damage: 120, fireRate: 2000, ammo: 4, maxAmmo: 4 },
 ]
 
+// EVOLUTION UPDATE: Per-weapon bullet visuals
+export interface BulletVisual {
+  color: number
+  size: number
+  shape: 'circle' | 'rect' | 'triangle'
+  glow?: number
+}
+
+export const BULLET_VISUALS: Record<string, BulletVisual> = {
+  Pistol: { color: 0xffff00, size: 4, shape: 'circle' },
+  Shotgun: { color: 0xff6600, size: 5, shape: 'circle', glow: 0xff9900 },
+  SMG: { color: 0x00ff00, size: 3, shape: 'circle' },
+  Rifle: { color: 0x3498db, size: 4, shape: 'rect' },
+  Sniper: { color: 0xff0000, size: 3, shape: 'rect', glow: 0xff3333 },
+  Minigun: { color: 0xf1c40f, size: 2, shape: 'circle' },
+  'Rocket Launcher': { color: 0xff6600, size: 6, shape: 'circle', glow: 0xff3300 },
+  'Laser Rifle': { color: 0x00ffff, size: 3, shape: 'rect', glow: 0x00ccff },
+  Flamethrower: { color: 0xff3300, size: 4, shape: 'circle', glow: 0xff6600 },
+  'Rail Gun': { color: 0x9900ff, size: 4, shape: 'rect', glow: 0xcc66ff },
+  'Grenade Launcher': { color: 0xff9900, size: 6, shape: 'circle', glow: 0xffcc00 },
+  Laser: { color: 0x00ffff, size: 3, shape: 'rect', glow: 0x00ccff },
+  Rocket: { color: 0xff6600, size: 6, shape: 'circle', glow: 0xff3300 },
+  Plasma: { color: 0x9b59b6, size: 5, shape: 'circle', glow: 0xbb77dd },
+}
+
 export class Bullet extends Phaser.Physics.Arcade.Sprite {
   public damage: number
 

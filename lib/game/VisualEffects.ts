@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser'
+import { settingsManager } from './SettingsManager'
 
 /**
  * VisualEffects - Handles all visual feedback, particles, and screen effects
@@ -1041,6 +1042,239 @@ export class VisualEffects {
       duration: 500,
       ease: 'Cubic.easeOut',
       onComplete: () => glow.destroy()
+    })
+  }
+
+  // ==================== EVOLUTION UPDATE: Enhanced Kill Effects ====================
+
+  /**
+   * Create a kill effect based on the equipped cosmetic kill effect type
+   */
+  createKillEffect(x: number, y: number, effectType: string, color: number, size: number = 1) {
+    switch (effectType) {
+      case 'shatter':
+        this.createShatterEffect(x, y, color, size)
+        break
+      case 'dissolve':
+        this.createDissolveEffect(x, y, color, size)
+        break
+      case 'vaporize':
+        this.createVaporizeEffect(x, y, color, size)
+        break
+      case 'implode':
+        this.createImplodeEffect(x, y, color, size)
+        break
+      case 'lightning':
+        this.createLightningDeathEffect(x, y, color, size)
+        break
+      default:
+        this.createDeathExplosion(x, y, color, size)
+        break
+    }
+  }
+
+  private createShatterEffect(x: number, y: number, color: number, size: number) {
+    // Ice shatter — angular shards flying outward
+    const shardCount = Math.floor(15 * size)
+    for (let i = 0; i < shardCount; i++) {
+      const angle = (i / shardCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.2, 0.2)
+      const speed = Phaser.Math.Between(100, 250) * size
+      const w = Phaser.Math.Between(4, 10)
+      const h = Phaser.Math.Between(2, 5)
+
+      const shard = this.scene.add.rectangle(x, y, w, h, color)
+        .setDepth(5500).setRotation(angle)
+
+      this.scene.tweens.add({
+        targets: shard,
+        x: x + Math.cos(angle) * speed,
+        y: y + Math.sin(angle) * speed,
+        rotation: angle + Phaser.Math.FloatBetween(-3, 3),
+        alpha: 0,
+        duration: Phaser.Math.Between(400, 700),
+        ease: 'Cubic.easeOut',
+        onComplete: () => shard.destroy(),
+      })
+    }
+    // Ice flash
+    this.screenFlash(0x00ccff, 0.15, 100)
+  }
+
+  private createDissolveEffect(x: number, y: number, color: number, size: number) {
+    // Green particles rising and fading
+    const count = Math.floor(20 * size)
+    for (let i = 0; i < count; i++) {
+      const px = x + Phaser.Math.Between(-15, 15) * size
+      const py = y + Phaser.Math.Between(-15, 15) * size
+      const particleSize = Phaser.Math.Between(2, 6)
+
+      const p = this.scene.add.circle(px, py, particleSize, color)
+        .setDepth(5500).setAlpha(0.8)
+
+      this.scene.tweens.add({
+        targets: p,
+        y: py - Phaser.Math.Between(40, 100),
+        alpha: 0,
+        scale: 0.2,
+        duration: Phaser.Math.Between(600, 1200),
+        ease: 'Quad.easeOut',
+        onComplete: () => p.destroy(),
+      })
+    }
+  }
+
+  private createVaporizeEffect(x: number, y: number, color: number, size: number) {
+    // Bright flash + expanding heat wave
+    const flash = this.scene.add.circle(x, y, 15 * size, 0xffffff)
+      .setDepth(5500).setAlpha(1)
+
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 4,
+      alpha: 0,
+      duration: 300,
+      ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy(),
+    })
+
+    // Heat distortion rings
+    for (let i = 0; i < 3; i++) {
+      const ring = this.scene.add.circle(x, y, 10 * size, 0, 0)
+        .setStrokeStyle(3 - i, Phaser.Math.RND.pick([0xff6600, 0xff9900, 0xffcc00]))
+        .setDepth(5500)
+
+      this.scene.tweens.add({
+        targets: ring,
+        scale: 3 + i * 1.5,
+        alpha: 0,
+        duration: 400 + i * 100,
+        delay: i * 80,
+        ease: 'Cubic.easeOut',
+        onComplete: () => ring.destroy(),
+      })
+    }
+
+    this.screenFlash(0xff6600, 0.2, 150)
+  }
+
+  private createImplodeEffect(x: number, y: number, color: number, size: number) {
+    // Particles sucked INWARD then burst
+    const count = Math.floor(16 * size)
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2
+      const dist = Phaser.Math.Between(80, 150) * size
+      const startX = x + Math.cos(angle) * dist
+      const startY = y + Math.sin(angle) * dist
+
+      const p = this.scene.add.circle(startX, startY, Phaser.Math.Between(3, 6), color)
+        .setDepth(5500)
+
+      this.scene.tweens.add({
+        targets: p,
+        x: x, y: y,
+        scale: 0.1,
+        duration: 300,
+        ease: 'Cubic.easeIn',
+        onComplete: () => p.destroy(),
+      })
+    }
+
+    // Delayed burst
+    this.scene.time.delayedCall(320, () => {
+      const burst = this.scene.add.circle(x, y, 5 * size, 0xffffff)
+        .setDepth(5500)
+
+      this.scene.tweens.add({
+        targets: burst,
+        scale: 5,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => burst.destroy(),
+      })
+      this.shakeScreen('light')
+    })
+  }
+
+  private createLightningDeathEffect(x: number, y: number, color: number, size: number) {
+    // Lightning bolts + bright flash
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.3, 0.3)
+      const length = Phaser.Math.Between(30, 60) * size
+
+      const line = this.scene.add.line(
+        0, 0, x, y,
+        x + Math.cos(angle) * length,
+        y + Math.sin(angle) * length,
+        0xffff00
+      ).setDepth(5500).setLineWidth(3)
+
+      this.scene.tweens.add({
+        targets: line,
+        alpha: 0,
+        duration: 100,
+        yoyo: true,
+        repeat: 2,
+        onComplete: () => line.destroy(),
+      })
+    }
+
+    // Central flash
+    const flash = this.scene.add.circle(x, y, 12 * size, 0xffff00)
+      .setDepth(5500)
+
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 3,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => flash.destroy(),
+    })
+
+    this.screenFlash(0xffff00, 0.2, 100)
+  }
+
+  // ==================== EVOLUTION UPDATE: Scaled Screen Shake ====================
+
+  /**
+   * Screen shake scaled by damage dealt
+   */
+  shakeScreenScaled(damage: number, isCrit: boolean) {
+    if (!damage || damage <= 0) return
+    try {
+      if (!settingsManager.get('screenShake')) return
+    } catch (e) { /* proceed if settings unavailable */ }
+    const baseIntensity = Math.min(damage / 500, 0.015)
+    const intensity = isCrit ? baseIntensity * 2 : baseIntensity
+    const duration = isCrit ? 120 : 60
+    this.scene.cameras.main.shake(duration, Math.max(0.001, intensity))
+  }
+
+  /**
+   * Brief hit-stop effect on critical hits
+   */
+  hitStop(duration: number = 50) {
+    this.scene.time.timeScale = 0.1
+    this.scene.time.delayedCall(duration, () => {
+      this.scene.time.timeScale = 1
+    })
+  }
+
+  // ==================== EVOLUTION UPDATE: Player Trail Effect ====================
+
+  /**
+   * Emit a trail particle behind the player
+   */
+  createTrailParticle(x: number, y: number, color: number, size: number) {
+    const p = this.scene.add.circle(x, y, size, color)
+      .setDepth(50).setAlpha(0.6)
+
+    this.scene.tweens.add({
+      targets: p,
+      alpha: 0,
+      scale: 0.2,
+      duration: 300,
+      ease: 'Quad.easeOut',
+      onComplete: () => p.destroy(),
     })
   }
 

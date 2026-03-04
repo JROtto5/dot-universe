@@ -4,6 +4,13 @@ import { SkillTreeManager } from './SkillTree'
 import { ShopManager } from './ShopSystem'
 import { crossGameSynergy } from './CrossGameSynergy'
 import { weaponMastery } from './WeaponMastery'
+import { ArtifactDefinition, ArtifactEffect } from './ItemSystem'
+import { elementalSystem, ELEMENT_CONFIGS } from './ElementalSystem'
+import { prestigeSystem } from './PrestigeSystem'
+import { companionSystem } from './CompanionSystem'
+import { craftingSystem } from './CraftingSystem'
+import { eventSystem } from './EventSystem'
+import { cosmeticSystem } from './CosmeticSystem'
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
   public health = 100
@@ -51,6 +58,50 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   public classWeapons: number[] = []
   // Healing blocked (challenge mode: healingAllowed=false)
   public healingBlocked = false
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRESTIGE & COMPANION BONUSES
+  // ═══════════════════════════════════════════════════════════════
+  public prestigeDamageBonus = 0
+  public prestigeCritBonus = 0
+  public prestigeHPBonus = 0
+  public prestigeRegenPerSec = 0
+  public prestigeStartingMoney = 0
+  public prestigeShopDiscount = 0
+  public prestigeItemRarityBonus = 0
+  public prestigeCDRBonus = 0
+  public prestigeHasExtraLife = false
+  private prestigeExtraLifeUsed = false
+  private lastPrestigeRegenTick = 0
+  public companionSpeedBonus = 0
+
+  // ═══════════════════════════════════════════════════════════════
+  // CRAFTING & BLESSING BONUSES (Evolution Update)
+  // ═══════════════════════════════════════════════════════════════
+  public craftingDamageBonus = 0
+  public craftingFireRateBonus = 0
+  public craftingAmmoBonus = 0
+  public craftingCritBonus = 0
+  public craftingSpeedBonus = 0
+  public craftingLifestealBonus = 0
+  public blessingDamageBonus = 0
+  public blessingSpeedBonus = 0
+  public blessingFireRateBonus = 0
+  public blessingGoldBonus = 0
+  public blessingHPBonus = 0
+  public blessingCritBonus = 0
+  public blessingLifestealBonus = 0
+
+  // ═══════════════════════════════════════════════════════════════
+  // ARTIFACT SYSTEM
+  // ═══════════════════════════════════════════════════════════════
+  public equippedArtifact: ArtifactDefinition | null = null
+  public artifactInventory: ArtifactDefinition[] = []
+  private artifactShotCounter = 0
+  private artifactKillCounter = 0
+  private artifactKillTimes: number[] = []
+  private artifactTimerLast = 0
+  private artifactReviveUsed = false
 
   // Abilities
   private hasDash = false
@@ -197,12 +248,73 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private createVisual() {
     const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false)
 
-    // Body (blue)
-    graphics.fillStyle(0x3498db, 1)
-    graphics.fillCircle(16, 16, 16)
+    // Get active cosmetic skin
+    let bodyColor = 0x3498db
+    let eyeColor = 0xffffff
+    let outlineColor = 0x2980b9
+    let shape: 'circle' | 'diamond' | 'hexagon' | 'star' = 'circle'
+    let glowColor: number | undefined
+
+    try {
+      const skin = cosmeticSystem.getActivePlayerSkin()
+      bodyColor = skin.bodyColor
+      eyeColor = skin.eyeColor
+      outlineColor = skin.outlineColor
+      shape = skin.shape
+      glowColor = skin.glowColor
+    } catch (e) { /* use defaults */ }
+
+    // Use unique texture key to avoid caching stale skins
+    const texKey = `player_${bodyColor.toString(16)}_${shape}`
+
+    // Outline
+    graphics.fillStyle(outlineColor, 1)
+    if (shape === 'circle') {
+      graphics.fillCircle(16, 16, 16)
+    } else if (shape === 'diamond') {
+      graphics.fillPoints([{ x: 16, y: 0 }, { x: 32, y: 16 }, { x: 16, y: 32 }, { x: 0, y: 16 }], true)
+    } else if (shape === 'hexagon') {
+      const pts = []
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i - Math.PI / 2
+        pts.push({ x: 16 + Math.cos(a) * 16, y: 16 + Math.sin(a) * 16 })
+      }
+      graphics.fillPoints(pts, true)
+    } else if (shape === 'star') {
+      const pts = []
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI / 5) * i - Math.PI / 2
+        const r = i % 2 === 0 ? 16 : 8
+        pts.push({ x: 16 + Math.cos(a) * r, y: 16 + Math.sin(a) * r })
+      }
+      graphics.fillPoints(pts, true)
+    }
+
+    // Body (inner)
+    graphics.fillStyle(bodyColor, 1)
+    if (shape === 'circle') {
+      graphics.fillCircle(16, 16, 13)
+    } else if (shape === 'diamond') {
+      graphics.fillPoints([{ x: 16, y: 3 }, { x: 29, y: 16 }, { x: 16, y: 29 }, { x: 3, y: 16 }], true)
+    } else if (shape === 'hexagon') {
+      const pts = []
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i - Math.PI / 2
+        pts.push({ x: 16 + Math.cos(a) * 13, y: 16 + Math.sin(a) * 13 })
+      }
+      graphics.fillPoints(pts, true)
+    } else if (shape === 'star') {
+      const pts = []
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI / 5) * i - Math.PI / 2
+        const r = i % 2 === 0 ? 13 : 6
+        pts.push({ x: 16 + Math.cos(a) * r, y: 16 + Math.sin(a) * r })
+      }
+      graphics.fillPoints(pts, true)
+    }
 
     // Eyes
-    graphics.fillStyle(0xffffff, 1)
+    graphics.fillStyle(eyeColor, 1)
     graphics.fillCircle(12, 12, 3)
     graphics.fillCircle(20, 12, 3)
 
@@ -211,10 +323,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     graphics.fillCircle(12, 12, 1.5)
     graphics.fillCircle(20, 12, 1.5)
 
-    graphics.generateTexture('player', 32, 32)
+    graphics.generateTexture(texKey, 32, 32)
     graphics.destroy()
 
-    this.setTexture('player')
+    this.setTexture(texKey)
+
+    // Apply glow tint if skin has one
+    if (glowColor) {
+      this.setTint(glowColor)
+    }
   }
 
   move(directionX: number, directionY: number) {
@@ -248,6 +365,24 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     this.setVelocity(velocityX, velocityY)
+
+    // Emit trail particle if cosmetic trail is equipped and player is moving
+    if (directionX !== 0 || directionY !== 0) {
+      try {
+        const trail = cosmeticSystem.getActiveTrailEffect()
+        if (trail.particleSize > 0 && trail.color !== 0x000000) {
+          const particle = this.scene.add.circle(
+            this.x - velocityX * 0.02 + (Math.random() - 0.5) * 8,
+            this.y - velocityY * 0.02 + (Math.random() - 0.5) * 8,
+            trail.particleSize, trail.color, 0.6
+          )
+          this.scene.tweens.add({
+            targets: particle, alpha: 0, scale: 0.3, duration: 400,
+            onComplete: () => particle.destroy()
+          })
+        }
+      } catch (e) { /* ignore trail errors */ }
+    }
 
     // Update aim line
     const pointer = this.scene.input.activePointer
@@ -647,6 +782,162 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.recalculateSpeed()
   }
 
+  // PRESTIGE SYSTEM: Load prestige bonuses at game start
+  loadPrestigeBonuses() {
+    try {
+      this.prestigeDamageBonus = prestigeSystem.getTalentBonus('damagePercent') / 100
+      this.prestigeCritBonus = prestigeSystem.getTalentBonus('critPercent') / 100
+      this.prestigeHPBonus = prestigeSystem.getTalentBonus('hpPercent') / 100
+      this.prestigeRegenPerSec = prestigeSystem.getTalentBonus('regenPerSec')
+      this.prestigeStartingMoney = prestigeSystem.getTalentBonus('startingMoney')
+      this.prestigeShopDiscount = prestigeSystem.getTalentBonus('shopDiscount') / 100
+      this.prestigeItemRarityBonus = prestigeSystem.getTalentBonus('itemRarityPercent') / 100
+      this.prestigeCDRBonus = prestigeSystem.getTalentBonus('cdrPercent') / 100
+      this.prestigeHasExtraLife = prestigeSystem.getTalentBonus('hasExtraLife') > 0
+      this.prestigeExtraLifeUsed = false
+      this.lastPrestigeRegenTick = 0
+
+      // Apply HP bonus
+      if (this.prestigeHPBonus > 0) {
+        this.maxHealth = Math.floor(this.maxHealth * (1 + this.prestigeHPBonus))
+        this.health = this.maxHealth
+      }
+
+      // Apply starting money
+      if (this.prestigeStartingMoney > 0) {
+        this.money += this.prestigeStartingMoney
+      }
+    } catch (e) {
+      console.warn('Failed to load prestige bonuses:', e)
+    }
+  }
+
+  // COMPANION SYSTEM: Load companion bonuses
+  loadCompanionBonuses() {
+    try {
+      const bonuses = companionSystem.getPassiveBonuses()
+      this.companionSpeedBonus = bonuses.speedPercent / 100
+    } catch (e) {
+      console.warn('Failed to load companion bonuses:', e)
+    }
+  }
+
+  // CRAFTING SYSTEM: Load crafting bonuses for current weapon
+  loadCraftingBonuses() {
+    try {
+      const weaponName = this.weapons[this.currentWeapon].name
+      const bonuses = craftingSystem.getAggregatedCraftBonuses(weaponName)
+      this.craftingDamageBonus = (bonuses.damagePercent ?? 0) / 100
+      this.craftingFireRateBonus = (bonuses.fireRatePercent ?? 0) / 100
+      this.craftingAmmoBonus = bonuses.ammoFlat ?? 0
+      this.craftingCritBonus = (bonuses.critPercent ?? 0) / 100
+      this.craftingSpeedBonus = (bonuses.speedPercent ?? 0) / 100
+      this.craftingLifestealBonus = (bonuses.lifestealPercent ?? 0) / 100
+
+      // Apply ammo bonus
+      if (this.craftingAmmoBonus > 0) {
+        this.weapons[this.currentWeapon].maxAmmo = this.BASE_WEAPONS[this.currentWeapon].maxAmmo + Math.floor(this.craftingAmmoBonus)
+        this.maxAmmo = this.weapons[this.currentWeapon].maxAmmo
+      }
+    } catch (e) {
+      console.warn('Failed to load crafting bonuses:', e)
+    }
+  }
+
+  // BLESSING SYSTEM: Load active blessing bonuses from EventSystem
+  loadBlessingBonuses() {
+    try {
+      this.blessingDamageBonus = 0
+      this.blessingSpeedBonus = 0
+      this.blessingFireRateBonus = 0
+      this.blessingGoldBonus = 0
+      this.blessingHPBonus = 0
+      this.blessingCritBonus = 0
+      this.blessingLifestealBonus = 0
+
+      const blessings = eventSystem.getActiveBlessings()
+      for (const b of blessings) {
+        const stat = b.blessing.stat
+        const val = b.blessing.value
+        if (stat === 'damagePercent') this.blessingDamageBonus += val / 100
+        else if (stat === 'maxHP') this.blessingHPBonus += val
+        else if (stat === 'goldPercent') this.blessingGoldBonus += val / 100
+        else if (stat === 'speedFireRatePercent') {
+          this.blessingSpeedBonus += val / 100
+          this.blessingFireRateBonus += val / 100
+        }
+        else if (stat === 'lifestealPercent') this.blessingLifestealBonus += val / 100
+        else if (stat === 'critPercent') this.blessingCritBonus += val / 100
+      }
+
+      // Also apply curse buff/curse stat effects
+      const curses = eventSystem.getActiveCurses()
+      for (const c of curses) {
+        // Apply the buff part
+        const bStat = c.curse.buffStat
+        const bVal = c.curse.buffValue
+        if (bStat === 'damagePercent') this.blessingDamageBonus += bVal / 100
+        else if (bStat === 'fireRatePercent') this.blessingFireRateBonus += bVal / 100
+        else if (bStat === 'speedPercent') this.blessingSpeedBonus += bVal / 100
+        else if (bStat === 'allPercent') {
+          this.blessingDamageBonus += bVal / 100
+          this.blessingSpeedBonus += bVal / 100
+          this.blessingFireRateBonus += bVal / 100
+        }
+
+        // Apply the curse part
+        const cStat = c.curse.curseStat
+        const cVal = c.curse.curseValue
+        if (cStat === 'maxHPPercent') {
+          const hpChange = Math.floor(this.maxHealth * (cVal / 100))
+          this.blessingHPBonus += hpChange  // cVal is negative
+        }
+        else if (cStat === 'damagePercent') this.blessingDamageBonus += cVal / 100
+        // dotDPS curses are handled in GameSceneV3 update loop, not here
+      }
+
+      // Apply HP bonus from blessings
+      if (this.blessingHPBonus !== 0) {
+        this.maxHealth += this.blessingHPBonus
+        if (this.maxHealth < 1) this.maxHealth = 1
+        this.health = Math.min(this.health, this.maxHealth)
+      }
+    } catch (e) {
+      console.warn('Failed to load blessing bonuses:', e)
+    }
+  }
+
+  // PRESTIGE: Extra life check — returns true if revived
+  checkPrestigeExtraLife(): boolean {
+    if (this.prestigeHasExtraLife && !this.prestigeExtraLifeUsed && this.health <= 0) {
+      this.prestigeExtraLifeUsed = true
+      this.health = Math.floor(this.maxHealth * 0.5)
+      this.emitMessage('SECOND WIND! Revived at 50% HP!', 'success')
+      return true
+    }
+    return false
+  }
+
+  // PRESTIGE: Regen tick (call from update loop)
+  updatePrestigeRegen() {
+    if (this.prestigeRegenPerSec <= 0) return
+    const now = this.scene.time.now
+    if (now - this.lastPrestigeRegenTick >= 1000) {
+      this.lastPrestigeRegenTick = now
+      this.heal(this.prestigeRegenPerSec)
+    }
+  }
+
+  // ELEMENTAL: Get bullet tint for current weapon
+  getElementalBulletTint(): number | null {
+    return elementalSystem.getBulletTint(this.weapons[this.currentWeapon].name)
+  }
+
+  // ELEMENTAL: Get element config for current weapon
+  getCurrentWeaponElement() {
+    return elementalSystem.getDamageModifier(this.weapons[this.currentWeapon].name)
+  }
+
   // CROSS-GAME SYNERGY: Load bonus from Dot Clicker using unified synergy service
   loadClickerSynergy() {
     try {
@@ -728,6 +1019,21 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.speed *= this.modifierEffects.playerSpeedMult
     }
 
+    // Apply companion speed bonus
+    if (this.companionSpeedBonus > 0) {
+      this.speed *= (1 + this.companionSpeedBonus)
+    }
+
+    // Apply crafting speed bonus
+    if (this.craftingSpeedBonus > 0) {
+      this.speed *= (1 + this.craftingSpeedBonus)
+    }
+
+    // Apply blessing speed bonus
+    if (this.blessingSpeedBonus !== 0) {
+      this.speed *= (1 + this.blessingSpeedBonus)
+    }
+
     // Apply speed boost power-up (capped at 1.3x to prevent crazy speeds)
     if (this.speedBoostActive) {
       this.speed *= 1.3
@@ -766,6 +1072,29 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       damage *= this.activeSetEffects.damageMult
     }
 
+    // Apply prestige damage bonus
+    if (this.prestigeDamageBonus > 0) {
+      damage *= (1 + this.prestigeDamageBonus)
+    }
+
+    // Apply crafting bonus
+    if (this.craftingDamageBonus !== 0) {
+      damage *= (1 + this.craftingDamageBonus)
+    }
+
+    // Apply blessing bonus
+    if (this.blessingDamageBonus !== 0) {
+      damage *= (1 + this.blessingDamageBonus)
+    }
+
+    // Apply elemental base damage multiplier
+    const elementConfig = this.getCurrentWeaponElement()
+    if (elementConfig) {
+      damage *= elementConfig.baseDamageMult
+    }
+
+    // Apply companion boss damage bonus (applied in GameSceneV3 for boss-specific check)
+
     // Apply power-up bonus
     if (this.damageBoostActive) {
       damage *= 2
@@ -782,9 +1111,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       damage *= (1 + missingHPPct * this.activeSetEffects.dmgPerMissingHPPct)
     }
 
-    // Critical hit chance (skill + shop)
+    // Critical hit chance (skill + shop + prestige + crafting + blessing)
     const skillCritChance = this.skillTree.getTotalBonus('critChance')
-    const totalCritChance = skillCritChance + this.shopCritBonus
+    const totalCritChance = skillCritChance + this.shopCritBonus + this.prestigeCritBonus + this.craftingCritBonus + this.blessingCritBonus
     if (Math.random() < totalCritChance) {
       damage *= 3 // Critical hit!
       this.emitCriticalHit()
@@ -821,6 +1150,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       const masteryBonus = weaponMastery.getBonus(this.weapons[this.currentWeapon].name)
       fireRate /= masteryBonus.fireRateMult
     } catch (e) { /* ignore */ }
+
+    // Apply crafting fire rate bonus
+    if (this.craftingFireRateBonus > 0) {
+      fireRate /= (1 + this.craftingFireRateBonus)
+    }
+
+    // Apply blessing fire rate bonus
+    if (this.blessingFireRateBonus > 0) {
+      fireRate /= (1 + this.blessingFireRateBonus)
+    }
 
     // Apply item set fire rate bonus
     if (this.activeSetEffects.fireRateMult) {
@@ -1274,6 +1613,165 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
     this.money += amount
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ARTIFACT TRIGGER ENGINE
+  // ═══════════════════════════════════════════════════════════════
+
+  equipArtifact(artifact: ArtifactDefinition) {
+    // If we already have one equipped, move it to inventory
+    if (this.equippedArtifact) {
+      this.artifactInventory.push(this.equippedArtifact)
+    }
+    // Remove from inventory if it was there
+    this.artifactInventory = this.artifactInventory.filter(a => a.id !== artifact.id)
+    this.equippedArtifact = artifact
+    this.artifactShotCounter = 0
+    this.artifactKillCounter = 0
+    this.artifactKillTimes = []
+    this.artifactTimerLast = 0
+    this.artifactReviveUsed = false
+    this.emitMessage(`Equipped: ${artifact.icon} ${artifact.name}`, 'success')
+    this.saveArtifacts()
+  }
+
+  unequipArtifact() {
+    if (this.equippedArtifact) {
+      this.artifactInventory.push(this.equippedArtifact)
+      this.equippedArtifact = null
+      this.saveArtifacts()
+    }
+  }
+
+  addArtifactToInventory(artifact: ArtifactDefinition) {
+    // Don't add duplicates
+    const hasDuplicate = this.artifactInventory.some(a => a.id === artifact.id) ||
+                         (this.equippedArtifact?.id === artifact.id)
+    if (hasDuplicate) return false
+    this.artifactInventory.push(artifact)
+    this.saveArtifacts()
+    return true
+  }
+
+  private saveArtifacts() {
+    try {
+      const data = {
+        equipped: this.equippedArtifact?.id || null,
+        inventory: this.artifactInventory.map(a => a.id)
+      }
+      localStorage.setItem('dotslayer_artifacts', JSON.stringify(data))
+    } catch (e) { /* ignore */ }
+  }
+
+  /** Called every time player fires a shot */
+  onShotFired(): ArtifactEffect | null {
+    if (!this.equippedArtifact) return null
+    this.artifactShotCounter++
+    const trigger = this.equippedArtifact.trigger
+    if (trigger.type === 'on_nth_shot' && this.artifactShotCounter >= trigger.n) {
+      this.artifactShotCounter = 0
+      return this.equippedArtifact.effect
+    }
+    return null
+  }
+
+  /** Called when player kills an enemy */
+  onEnemyKilledArtifact(): ArtifactEffect | null {
+    if (!this.equippedArtifact) return null
+    const now = Date.now()
+    const trigger = this.equippedArtifact.trigger
+
+    this.artifactKillCounter++
+    this.artifactKillTimes.push(now)
+
+    // on_kill trigger
+    if (trigger.type === 'on_kill') {
+      if (Math.random() < trigger.chance) {
+        return this.equippedArtifact.effect
+      }
+    }
+
+    // on_kill_count trigger
+    if (trigger.type === 'on_kill_count' && this.artifactKillCounter >= trigger.every) {
+      this.artifactKillCounter = 0
+      return this.equippedArtifact.effect
+    }
+
+    // on_kill_streak trigger
+    if (trigger.type === 'on_kill_streak') {
+      // Filter kills within the time window
+      this.artifactKillTimes = this.artifactKillTimes.filter(t => now - t < trigger.window)
+      if (this.artifactKillTimes.length >= trigger.kills) {
+        this.artifactKillTimes = []
+        return this.equippedArtifact.effect
+      }
+    }
+
+    return null
+  }
+
+  /** Called when player takes damage */
+  onDamageTakenArtifact(attackerX?: number, attackerY?: number): ArtifactEffect | null {
+    if (!this.equippedArtifact) return null
+    const trigger = this.equippedArtifact.trigger
+
+    if (trigger.type === 'on_hit_received') {
+      if (Math.random() < trigger.chance) {
+        return this.equippedArtifact.effect
+      }
+    }
+
+    return null
+  }
+
+  /** Called when player dies - check for revive artifact */
+  onPlayerDeathArtifact(): ArtifactEffect | null {
+    if (!this.equippedArtifact || this.artifactReviveUsed) return null
+    if (this.equippedArtifact.trigger.type === 'on_death') {
+      this.artifactReviveUsed = true
+      return this.equippedArtifact.effect
+    }
+    return null
+  }
+
+  /** Called on reload */
+  onReloadArtifact(): ArtifactEffect | null {
+    if (!this.equippedArtifact) return null
+    const trigger = this.equippedArtifact.trigger
+    if (trigger.type === 'on_reload' && Math.random() < trigger.chance) {
+      return this.equippedArtifact.effect
+    }
+    return null
+  }
+
+  /** Check passive artifact effects (called in update loop) */
+  checkPassiveArtifact(): ArtifactEffect | null {
+    if (!this.equippedArtifact) return null
+    const trigger = this.equippedArtifact.trigger
+
+    // Passive (always active)
+    if (trigger.type === 'passive') {
+      return this.equippedArtifact.effect
+    }
+
+    // Timer-based
+    if (trigger.type === 'on_timer') {
+      const now = Date.now()
+      if (now - this.artifactTimerLast >= trigger.interval) {
+        this.artifactTimerLast = now
+        return this.equippedArtifact.effect
+      }
+    }
+
+    // Low health threshold
+    if (trigger.type === 'on_low_health') {
+      if (this.health > 0 && this.health / this.maxHealth <= trigger.threshold) {
+        return this.equippedArtifact.effect
+      }
+    }
+
+    return null
   }
 
   destroy(fromScene?: boolean) {

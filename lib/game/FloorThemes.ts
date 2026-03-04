@@ -5,6 +5,142 @@ import * as Phaser from 'phaser'
  * Each theme has unique colors, particles, and atmosphere
  */
 
+// ═══════════════════════════════════════════════════════════════
+// FLOOR HAZARD SYSTEM
+// ═══════════════════════════════════════════════════════════════
+export type FloorHazardType = 'acid_pool' | 'spike_trap' | 'lava_zone' | 'ice_patch' | 'poison_fog' | 'fire_geyser' | 'electric_field'
+
+export interface HazardConfig {
+  type: FloorHazardType
+  color: number
+  radius: number
+  damagePerSecond: number
+  burstDamage: number
+  slowPercent: number
+  warningTime: number // ms before activation (0 = always active)
+  duration: number // 0 = permanent
+  pulseSpeed: number // visual pulse speed multiplier
+}
+
+export const HAZARD_CONFIGS: Record<FloorHazardType, HazardConfig> = {
+  acid_pool: {
+    type: 'acid_pool',
+    color: 0x2ecc71,
+    radius: 60,
+    damagePerSecond: 15,
+    burstDamage: 0,
+    slowPercent: 20,
+    warningTime: 0,
+    duration: 0,
+    pulseSpeed: 1.5
+  },
+  spike_trap: {
+    type: 'spike_trap',
+    color: 0x95a5a6,
+    radius: 40,
+    damagePerSecond: 0,
+    burstDamage: 40,
+    slowPercent: 0,
+    warningTime: 1000,
+    duration: 0,
+    pulseSpeed: 3.0
+  },
+  lava_zone: {
+    type: 'lava_zone',
+    color: 0xff6600,
+    radius: 70,
+    damagePerSecond: 25,
+    burstDamage: 0,
+    slowPercent: 0,
+    warningTime: 0,
+    duration: 0,
+    pulseSpeed: 2.0
+  },
+  ice_patch: {
+    type: 'ice_patch',
+    color: 0x74b9ff,
+    radius: 80,
+    damagePerSecond: 0,
+    burstDamage: 0,
+    slowPercent: 50,
+    warningTime: 0,
+    duration: 0,
+    pulseSpeed: 0.5
+  },
+  poison_fog: {
+    type: 'poison_fog',
+    color: 0x27ae60,
+    radius: 100,
+    damagePerSecond: 10,
+    burstDamage: 0,
+    slowPercent: 0,
+    warningTime: 0,
+    duration: 8000,
+    pulseSpeed: 0.8
+  },
+  fire_geyser: {
+    type: 'fire_geyser',
+    color: 0xff4500,
+    radius: 50,
+    damagePerSecond: 0,
+    burstDamage: 60,
+    slowPercent: 0,
+    warningTime: 2000,
+    duration: 0,
+    pulseSpeed: 4.0
+  },
+  electric_field: {
+    type: 'electric_field',
+    color: 0x00ff00,
+    radius: 55,
+    damagePerSecond: 20,
+    burstDamage: 0,
+    slowPercent: 0,
+    warningTime: 0,
+    duration: 5000,
+    pulseSpeed: 5.0
+  }
+}
+
+// Map themes to their hazard types
+export const THEME_HAZARDS: Record<string, FloorHazardType[]> = {
+  training: [],
+  bunker: ['spike_trap'],
+  toxic: ['acid_pool', 'poison_fog'],
+  inferno: ['lava_zone', 'fire_geyser'],
+  frozen: ['ice_patch'],
+  cyber: ['electric_field'],
+  arena: ['spike_trap', 'fire_geyser'],
+  shadow: ['spike_trap', 'poison_fog'],
+  palace: ['fire_geyser', 'electric_field'],
+  ascent: ['lava_zone', 'fire_geyser', 'electric_field']
+}
+
+/**
+ * Get hazard types for a floor number
+ */
+export function getHazardsForFloor(floorNumber: number): FloorHazardType[] {
+  if (floorNumber < 5) return [] // No hazards in first 4 floors
+  const themeName = getThemeNameForFloor(floorNumber)
+  return THEME_HAZARDS[themeName] || []
+}
+
+/**
+ * Get theme name for a floor
+ */
+export function getThemeNameForFloor(floorNumber: number): string {
+  if (floorNumber <= 10) return 'training'
+  if (floorNumber <= 20) return 'bunker'
+  if (floorNumber <= 30) return 'toxic'
+  if (floorNumber <= 40) return 'inferno'
+  if (floorNumber <= 50) return 'frozen'
+  if (floorNumber <= 60) return 'cyber'
+  if (floorNumber <= 70) return 'arena'
+  if (floorNumber <= 80) return 'shadow'
+  if (floorNumber <= 90) return 'palace'
+  return 'ascent'
+}
+
 export interface FloorTheme {
   name: string
   bgColor: number

@@ -712,6 +712,82 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'platinum',
     color: 0xffd700
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRESTIGE ACHIEVEMENTS
+  // ═══════════════════════════════════════════════════════════════
+  {
+    id: 'prestige_first',
+    name: 'Ascended',
+    description: 'Prestige for the first time',
+    icon: '⭐',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_prestige') || '{}'); return (d.prestigeLevel || 0) >= 1 } catch { return false }
+    },
+    tier: 'silver',
+    color: 0xc0c0c0
+  },
+  {
+    id: 'prestige_5',
+    name: 'Veteran Ascendant',
+    description: 'Prestige 5 times',
+    icon: '🌟',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_prestige') || '{}'); return (d.prestigeLevel || 0) >= 5 } catch { return false }
+    },
+    tier: 'gold',
+    color: 0xffd700
+  },
+  {
+    id: 'prestige_10',
+    name: 'Eternal Ascendant',
+    description: 'Prestige 10 times',
+    icon: '💫',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_prestige') || '{}'); return (d.prestigeLevel || 0) >= 10 } catch { return false }
+    },
+    tier: 'platinum',
+    color: 0x00d9ff
+  },
+  {
+    id: 'ng_plus_3',
+    name: 'NG+3 Conqueror',
+    description: 'Complete floor 150 on NG+3 or higher',
+    icon: '🔥',
+    condition: () => {
+      try {
+        const d = JSON.parse(localStorage.getItem('dotslayer_prestige') || '{}')
+        return (d.ngPlusTier || 0) >= 3 && (d.prestigeStats?.highestFloorEver || 0) >= 150
+      } catch { return false }
+    },
+    tier: 'platinum',
+    color: 0xff4500
+  },
+  {
+    id: 'ng_plus_5',
+    name: 'NG+5 Legend',
+    description: 'Complete floor 150 on NG+5',
+    icon: '👑',
+    condition: () => {
+      try {
+        const d = JSON.parse(localStorage.getItem('dotslayer_prestige') || '{}')
+        return (d.ngPlusTier || 0) >= 5 && (d.prestigeStats?.highestFloorEver || 0) >= 150
+      } catch { return false }
+    },
+    tier: 'platinum',
+    color: 0xff0266
+  },
+  {
+    id: 'talent_tree_full',
+    name: 'Fully Ascended',
+    description: 'Unlock all talents in the Ascension tree',
+    icon: '🌳',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_prestige') || '{}'); return (d.unlockedTalents || []).length >= 16 } catch { return false }
+    },
+    tier: 'platinum',
+    color: 0x9b59b6
+  },
 ]
 
 export class AchievementManager {

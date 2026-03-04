@@ -222,15 +222,51 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MULTI-PHASE BOSS CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+export interface BossPhaseConfig {
+  abilityInterval: number
+  speedMult: number
+  damageMult: number
+  abilities: string[] // subset of boss abilities to use in this phase
+  tint: number
+}
+
+export const BOSS_PHASE_CONFIGS: Record<BossType, BossPhaseConfig[]> = {
+  tank:            [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['tank'], tint: 0x7f8c8d }, { abilityInterval: 2500, speedMult: 1.2, damageMult: 1.3, abilities: ['tank'], tint: 0xbdc3c7 }, { abilityInterval: 2000, speedMult: 1.5, damageMult: 1.6, abilities: ['tank'], tint: 0xecf0f1 }],
+  speed:           [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['speed'], tint: 0x8e44ad }, { abilityInterval: 2200, speedMult: 1.4, damageMult: 1.2, abilities: ['speed'], tint: 0xbe2edd }, { abilityInterval: 1500, speedMult: 1.8, damageMult: 1.5, abilities: ['speed'], tint: 0xe056fd }],
+  sniper:          [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['sniper'], tint: 0x16a085 }, { abilityInterval: 2500, speedMult: 1.1, damageMult: 1.5, abilities: ['sniper'], tint: 0x1abc9c }, { abilityInterval: 2000, speedMult: 1.3, damageMult: 2.0, abilities: ['sniper'], tint: 0x55efc4 }],
+  healer:          [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['healer'], tint: 0x27ae60 }, { abilityInterval: 2000, speedMult: 1.2, damageMult: 1.2, abilities: ['healer'], tint: 0x2ecc71 }, { abilityInterval: 1500, speedMult: 1.4, damageMult: 1.4, abilities: ['healer'], tint: 0x55efc4 }],
+  mega:            [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['mega'], tint: 0xc0392b }, { abilityInterval: 2500, speedMult: 1.2, damageMult: 1.3, abilities: ['mega'], tint: 0xe74c3c }, { abilityInterval: 1800, speedMult: 1.5, damageMult: 1.6, abilities: ['mega'], tint: 0xff6b6b }],
+  hydra:           [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['hydra'], tint: 0x1abc9c }, { abilityInterval: 2500, speedMult: 1.2, damageMult: 1.3, abilities: ['hydra'], tint: 0x00cec9 }, { abilityInterval: 1800, speedMult: 1.5, damageMult: 1.6, abilities: ['hydra'], tint: 0x81ecec }],
+  dragon:          [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['dragon'], tint: 0xff4500 }, { abilityInterval: 2200, speedMult: 1.3, damageMult: 1.5, abilities: ['dragon'], tint: 0xff6348 }, { abilityInterval: 1500, speedMult: 1.6, damageMult: 2.0, abilities: ['dragon'], tint: 0xffbe76 }],
+  reaper:          [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['reaper'], tint: 0x2c2c54 }, { abilityInterval: 2200, speedMult: 1.4, damageMult: 1.4, abilities: ['reaper'], tint: 0x6c5ce7 }, { abilityInterval: 1500, speedMult: 1.8, damageMult: 1.8, abilities: ['reaper'], tint: 0xa29bfe }],
+  titan:           [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['titan'], tint: 0x6c5b7b }, { abilityInterval: 2500, speedMult: 1.2, damageMult: 1.5, abilities: ['titan'], tint: 0x786fa6 }, { abilityInterval: 2000, speedMult: 1.5, damageMult: 2.0, abilities: ['titan'], tint: 0xc7ecee }],
+  phoenix:         [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['phoenix'], tint: 0xf9ca24 }, { abilityInterval: 2200, speedMult: 1.3, damageMult: 1.3, abilities: ['phoenix'], tint: 0xf0932b }, { abilityInterval: 1500, speedMult: 1.6, damageMult: 1.7, abilities: ['phoenix'], tint: 0xff6b6b }],
+  void_lord:       [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['void_lord'], tint: 0x2d0050 }, { abilityInterval: 2200, speedMult: 1.3, damageMult: 1.4, abilities: ['void_lord'], tint: 0x6600cc }, { abilityInterval: 1500, speedMult: 1.6, damageMult: 1.8, abilities: ['void_lord'], tint: 0x9b59b6 }],
+  mecha_overlord:  [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['mecha_overlord'], tint: 0x44aaff }, { abilityInterval: 2200, speedMult: 1.2, damageMult: 1.3, abilities: ['mecha_overlord'], tint: 0x74b9ff }, { abilityInterval: 1500, speedMult: 1.5, damageMult: 1.6, abilities: ['mecha_overlord'], tint: 0xdfe6e9 }],
+  time_weaver:     [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['time_weaver'], tint: 0xf9ca24 }, { abilityInterval: 2200, speedMult: 1.4, damageMult: 1.3, abilities: ['time_weaver'], tint: 0xffeaa7 }, { abilityInterval: 1500, speedMult: 1.8, damageMult: 1.6, abilities: ['time_weaver'], tint: 0xffffff }],
+  plague_mother:   [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['plague_mother'], tint: 0x27ae60 }, { abilityInterval: 2200, speedMult: 1.2, damageMult: 1.3, abilities: ['plague_mother'], tint: 0x2ecc71 }, { abilityInterval: 1500, speedMult: 1.5, damageMult: 1.7, abilities: ['plague_mother'], tint: 0x55efc4 }],
+  architect:       [{ abilityInterval: 3000, speedMult: 1.0, damageMult: 1.0, abilities: ['architect'], tint: 0xbdc3c7 }, { abilityInterval: 2500, speedMult: 1.2, damageMult: 1.4, abilities: ['architect'], tint: 0xdfe6e9 }, { abilityInterval: 1800, speedMult: 1.5, damageMult: 1.8, abilities: ['architect'], tint: 0xffffff }],
+}
+
 export default class Boss extends Phaser.Physics.Arcade.Sprite {
   public health: number
   public maxHealth: number
   private speed: number
+  private baseSpeed: number
   private attackRange = 500
   private healthBar!: Phaser.GameObjects.Graphics
   private nameText!: Phaser.GameObjects.Text
   private bossConfig: BossConfig
   private specialAbilityTimer = 0
+  private isMiniBoss = false
+
+  // Multi-phase system
+  public currentPhase = 1
+  private phaseTransitioning = false
+  private phaseThresholds = [0.6, 0.25] // Phase 2 at 60% HP, Phase 3 at 25% HP
 
   constructor(scene: Phaser.Scene, x: number, y: number, bossType: BossType) {
     super(scene, x, y, '')
@@ -239,6 +275,7 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
     this.health = this.bossConfig.health
     this.maxHealth = this.bossConfig.health
     this.speed = this.bossConfig.speed
+    this.baseSpeed = this.bossConfig.speed
 
     scene.add.existing(this)
     scene.physics.add.existing(this)
@@ -530,9 +567,11 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity(0, 0)
     }
 
-    // Update special ability
+    // Update special ability (phase-based intervals)
     this.specialAbilityTimer += delta
-    if (this.specialAbilityTimer > 3000) {
+    const phaseConfig = !this.isMiniBoss ? BOSS_PHASE_CONFIGS[this.bossConfig.type]?.[this.currentPhase - 1] : null
+    const abilityInterval = phaseConfig?.abilityInterval ?? 3000
+    if (this.specialAbilityTimer > abilityInterval && !this.phaseTransitioning) {
       this.useSpecialAbility(player)
       this.specialAbilityTimer = 0
     }
@@ -1061,19 +1100,42 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount: number): boolean {
+    // Don't take damage during phase transition
+    if (this.phaseTransitioning) return false
+
     // Tank boss has damage reduction
     if (this.bossConfig.type === 'tank') {
       amount *= 0.7 // 30% damage reduction
     }
 
+    // Apply phase damage multiplier (bosses hit harder, but also take more damage in later phases)
     this.health -= amount
     this.health = Math.max(0, this.health)
 
     // Flash white
     this.setTint(0xffffff)
-    this.scene.time.delayedCall(100, () => this.clearTint())
+    this.scene.time.delayedCall(100, () => {
+      if (!this.phaseTransitioning) {
+        const phaseConfig = BOSS_PHASE_CONFIGS[this.bossConfig.type]?.[this.currentPhase - 1]
+        if (phaseConfig && !this.isMiniBoss) {
+          this.setTint(phaseConfig.tint)
+        } else {
+          this.clearTint()
+        }
+      }
+    })
 
     this.updateHealthBar()
+
+    // Check phase transitions (not for mini-bosses)
+    if (!this.isMiniBoss && this.health > 0) {
+      const healthPercent = this.health / this.maxHealth
+      if (this.currentPhase === 1 && healthPercent <= this.phaseThresholds[0]) {
+        this.transitionToPhase(2)
+      } else if (this.currentPhase === 2 && healthPercent <= this.phaseThresholds[1]) {
+        this.transitionToPhase(3)
+      }
+    }
 
     if (this.health <= 0) {
       this.die()
@@ -1081,6 +1143,60 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
     }
 
     return false
+  }
+
+  private transitionToPhase(phase: number) {
+    if (this.phaseTransitioning || this.isMiniBoss) return
+    this.phaseTransitioning = true
+    this.currentPhase = phase
+
+    const phaseConfig = BOSS_PHASE_CONFIGS[this.bossConfig.type]?.[phase - 1]
+    if (!phaseConfig) { this.phaseTransitioning = false; return }
+
+    // 1s invulnerability during transition
+    this.scene.cameras.main.shake(300, 0.015)
+    this.scene.cameras.main.flash(200, 255, 255, 255, false)
+
+    // Apply phase multipliers
+    this.speed = this.baseSpeed * phaseConfig.speedMult
+
+    // Visual tint change
+    this.setTint(phaseConfig.tint)
+
+    // Phase announcement
+    const phaseText = this.scene.add.text(
+      this.scene.scale.width / 2,
+      this.scene.scale.height / 2 - 80,
+      `⚠️ PHASE ${phase} ⚠️`,
+      {
+        fontSize: '56px',
+        color: phase === 3 ? '#ff0000' : '#ff6600',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 8,
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(10001)
+
+    this.scene.tweens.add({
+      targets: phaseText,
+      scale: 1.5,
+      alpha: 0,
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => phaseText.destroy()
+    })
+
+    // End invulnerability after 1s
+    this.scene.time.delayedCall(1000, () => {
+      this.phaseTransitioning = false
+    })
+
+    // Emit phase change event for arena hazards
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bossPhaseChange', {
+        detail: { bossType: this.bossConfig.type, phase, x: this.x, y: this.y }
+      }))
+    }
   }
 
   heal(amount: number) {
@@ -1307,6 +1423,22 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
       this.scene.cameras.main.shake(200, 0.005)
     }
 
+    // Boss Loot Explosion: guaranteed item drops from boss kills
+    if (typeof window !== 'undefined') {
+      const itemCount = isLegendary ? Phaser.Math.Between(4, 6) : (this.isMiniBoss ? Phaser.Math.Between(1, 2) : Phaser.Math.Between(2, 4))
+      const guaranteedRarity = isLegendary ? 'epic' : (this.isMiniBoss ? 'uncommon' : 'rare')
+      window.dispatchEvent(new CustomEvent('bossLootExplosion', {
+        detail: {
+          x: this.x,
+          y: this.y,
+          count: itemCount,
+          guaranteedRarity,
+          bossType: this.bossConfig.type,
+          isLegendary
+        }
+      }))
+    }
+
     // Emit boss death event
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('bossKilled', {
@@ -1333,7 +1465,9 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   getDamage(): number {
-    return this.bossConfig.damage
+    const phaseConfig = !this.isMiniBoss ? BOSS_PHASE_CONFIGS[this.bossConfig.type]?.[this.currentPhase - 1] : null
+    const damageMult = phaseConfig?.damageMult ?? 1.0
+    return Math.floor(this.bossConfig.damage * damageMult)
   }
 
   getBossType(): BossType {
@@ -1347,6 +1481,26 @@ export default class Boss extends Phaser.Physics.Arcade.Sprite {
   getMaxHealth(): number {
     return this.maxHealth
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // MINI-BOSS FACTORY
+  // ═══════════════════════════════════════════════════════════════
+  static createMiniBoss(scene: Phaser.Scene, x: number, y: number, bossType: BossType): Boss {
+    const miniBoss = new Boss(scene, x, y, bossType)
+    miniBoss.isMiniBoss = true
+    miniBoss.health = Math.floor(miniBoss.maxHealth * 0.4)
+    miniBoss.maxHealth = miniBoss.health
+    miniBoss.speed *= 1.2
+    miniBoss.setScale(0.7)
+    // Mini-bosses don't have phases
+    miniBoss.currentPhase = 1
+    // Update the name text
+    miniBoss.nameText.setText(`${miniBoss.bossConfig.icon} Mini ${miniBoss.bossConfig.name}`)
+    miniBoss.nameText.setFontSize(18)
+    return miniBoss
+  }
+
+  getIsMiniBoss(): boolean { return this.isMiniBoss }
 
   // Mega Boss ability: Summon minions
   private summonMinions() {
