@@ -3,6 +3,7 @@ import { WeaponSystem, WeaponType } from './Weapon'
 import { SkillTreeManager } from './SkillTree'
 import { ShopManager } from './ShopSystem'
 import { crossGameSynergy } from './CrossGameSynergy'
+import { weaponMastery } from './WeaponMastery'
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
   public health = 100
@@ -41,6 +42,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   public classFireRateBonus = 0
   public playerClass: any = null
   public currentWeaponIndex = 0
+
+  // Floor modifier effects (applied per floor)
+  public modifierEffects: Record<string, any> = {}
+  // Item set bonus effects
+  public activeSetEffects: Record<string, any> = {}
+  // Class weapon pool (indices into weapons array)
+  public classWeapons: number[] = []
+  // Healing blocked (challenge mode: healingAllowed=false)
+  public healingBlocked = false
 
   // Abilities
   private hasDash = false
@@ -271,8 +281,17 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   switchWeapon(index: number) {
-    // ROGUELIKE: Weapon switching disabled - always shotgun!
-    return
+    // Switch within class weapon pool (keys 1-3 map to pool indices 0-2)
+    if (this.classWeapons.length === 0) return
+    if (index < 0 || index >= this.classWeapons.length) return
+    const weaponIndex = this.classWeapons[index]
+    if (weaponIndex < 0 || weaponIndex >= this.weapons.length) return
+
+    this.currentWeapon = weaponIndex
+    this.currentAmmo = this.weapons[weaponIndex].maxAmmo
+    this.maxAmmo = this.weapons[weaponIndex].maxAmmo
+
+    this.emitMessage(`Switched to ${this.weapons[weaponIndex].name}`, 'success')
   }
 
   getCurrentWeaponName(): string {
@@ -293,6 +312,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
   // POWER-UP METHODS
   heal(amount: number) {
+    if (this.healingBlocked) return
     this.health = Math.min(this.maxHealth, this.health + amount)
   }
 
@@ -703,6 +723,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // Calculate final speed
     this.speed = this.baseSpeed
 
+    // Apply floor modifier speed
+    if (this.modifierEffects.playerSpeedMult) {
+      this.speed *= this.modifierEffects.playerSpeedMult
+    }
+
     // Apply speed boost power-up (capped at 1.3x to prevent crazy speeds)
     if (this.speedBoostActive) {
       this.speed *= 1.3
@@ -725,6 +750,22 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // Apply cross-game synergy bonus from Dot Clicker
     damage *= (1 + this.clickerSynergyBonus)
 
+    // Apply floor modifier damage bonus
+    if (this.modifierEffects.playerDamageMult) {
+      damage *= this.modifierEffects.playerDamageMult
+    }
+
+    // Apply weapon mastery bonus
+    try {
+      const masteryBonus = weaponMastery.getBonus(this.weapons[this.currentWeapon].name)
+      damage *= masteryBonus.damageMult
+    } catch (e) { /* ignore */ }
+
+    // Apply item set bonuses
+    if (this.activeSetEffects.damageMult) {
+      damage *= this.activeSetEffects.damageMult
+    }
+
     // Apply power-up bonus
     if (this.damageBoostActive) {
       damage *= 2
@@ -735,9 +776,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       damage *= 1.5
     }
 
-    // Shield protection visual
-    if (this.shieldHits > 0) {
-      // Shield is active
+    // Berserker set: +1% damage per missing HP%
+    if (this.activeSetEffects.dmgPerMissingHPPct) {
+      const missingHPPct = 1 - (this.health / this.maxHealth)
+      damage *= (1 + missingHPPct * this.activeSetEffects.dmgPerMissingHPPct)
     }
 
     // Critical hit chance (skill + shop)
@@ -767,6 +809,22 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // Time slow ability (0.8x fire rate = 20% faster)
     if (this.timeSlowActive) {
       fireRate *= 0.8
+    }
+
+    // Apply floor modifier fire rate (higher mult = faster fire = lower interval)
+    if (this.modifierEffects.playerFireRateMult) {
+      fireRate /= this.modifierEffects.playerFireRateMult
+    }
+
+    // Apply weapon mastery fire rate bonus
+    try {
+      const masteryBonus = weaponMastery.getBonus(this.weapons[this.currentWeapon].name)
+      fireRate /= masteryBonus.fireRateMult
+    } catch (e) { /* ignore */ }
+
+    // Apply item set fire rate bonus
+    if (this.activeSetEffects.fireRateMult) {
+      fireRate /= this.activeSetEffects.fireRateMult
     }
 
     // IMPORTANT: Cap minimum fire rate at 50ms to prevent insane shooting

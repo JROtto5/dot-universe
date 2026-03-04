@@ -528,8 +528,8 @@ export const ENEMY_STATS: Record<EnemyType, EnemyStats> = {
 export class AdvancedEnemy extends Phaser.Physics.Arcade.Sprite {
   public health: number
   public maxHealth: number
-  private speed: number
-  private damage: number
+  public speed: number
+  public damage: number
   private attackRange: number
   private attackSpeed: number
   private lastAttack = 0

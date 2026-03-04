@@ -32,6 +32,16 @@ import { getCombinedSetEffects, getActiveSetBonuses } from './ItemSets'
 import { endlessMode, EndlessModeManager } from './EndlessMode'
 import { challengeModes, ChallengeMode, ChallengeModeConfig, CHALLENGE_MODES } from './ChallengeModes'
 
+// Class weapon pools: each class has 3 weapons they can switch between
+const CLASS_WEAPON_POOLS: Record<string, number[]> = {
+  soldier: [0, 1, 2],     // Pistol, SMG, Shotgun
+  gunslinger: [1, 0, 6],  // SMG, Pistol, Minigun
+  tank: [2, 5, 6],        // Shotgun, Rocket, Minigun
+  assassin: [3, 4, 7],    // Sniper, Laser, Plasma
+  berserker: [2, 6, 0],   // Shotgun, Minigun, Pistol
+  vampire: [0, 4, 7],     // Pistol, Laser, Plasma
+}
+
 export default class GameSceneV3 extends Phaser.Scene {
   private player!: Player
   private enemies!: Phaser.GameObjects.Group
@@ -68,6 +78,15 @@ export default class GameSceneV3 extends Phaser.Scene {
   private activeChallengeMode: ChallengeModeConfig | null = null
   private challengeTimeDisplay: Phaser.GameObjects.Text | null = null
   private modifierBanner: Phaser.GameObjects.Container | null = null
+  private challengeTimerEvent: Phaser.Time.TimerEvent | null = null
+  private challengeTimeRemaining = 0
+  private survivalSpawnTimer: Phaser.Time.TimerEvent | null = null
+  private survivalSpawnInterval = 3000
+  private bossRushBossIndex = 0
+  private bossRushRestTimer: Phaser.Time.TimerEvent | null = null
+  private visibilityOverlay: Phaser.GameObjects.Graphics | null = null
+  private activeSetEffects: Record<string, any> = {}
+  private hasAutoRevive = false
 
   private currentUserId: string | null = null
   private currentPlayerName: string = 'Player'
@@ -236,8 +255,51 @@ export default class GameSceneV3 extends Phaser.Scene {
           this.player.maxHealth = 1
           this.player.health = 1
         }
+        if (!config.settings.healingAllowed) {
+          this.player.healingBlocked = true
+        }
       }
       this.registry.remove('gameMode')
+    }
+
+    // CHALLENGE MODE: Start timers and special logic after scene is set up
+    if (this.activeChallengeMode) {
+      const settings = this.activeChallengeMode.settings
+
+      // Speed Run: countdown timer
+      if (settings.timeLimit) {
+        this.challengeTimeRemaining = settings.timeLimit
+        this.challengeTimerEvent = this.time.addEvent({
+          delay: 1000,
+          callback: () => {
+            this.challengeTimeRemaining -= 1000
+            // Dispatch timer update to HUD
+            this.emitGameEvent('challengeTimer', {
+              timeRemaining: this.challengeTimeRemaining,
+              mode: this.activeChallengeMode!.id
+            })
+            if (this.challengeTimeRemaining <= 0) {
+              this.challengeTimerEvent?.remove()
+              this.addKillFeedMessage('⏱️ TIME\'S UP!', '#ff0000', 5000)
+              // End challenge - pass floors completed as score
+              const floorsCompleted = this.floorManager.getCurrentFloorNumber()
+              challengeModes.endChallenge(false, floorsCompleted)
+              this.gameOver()
+            }
+          },
+          loop: true
+        })
+      }
+
+      // Survival: continuous enemy spawning (handled in loadFloor override)
+      if (settings.enemySpawnContinuous) {
+        this.survivalSpawnInterval = 3000
+      }
+
+      // Boss Rush: initialize boss index (handled in loadFloor override)
+      if (settings.bossesOnly) {
+        this.bossRushBossIndex = 0
+      }
     }
 
     // Load cross-game synergy from Dot Clicker
@@ -471,6 +533,9 @@ export default class GameSceneV3 extends Phaser.Scene {
       this.player.setCurrentWeapon(Math.min(playerClass.startingWeapon, this.player.weapons.length - 1))
     }
 
+    // Set class weapon pool for weapon switching
+    this.player.classWeapons = CLASS_WEAPON_POOLS[playerClass.id] || [this.player.getCurrentWeapon()]
+
     // Show class message
     const className = playerClass.name || 'Unknown'
     const special = playerClass.special || ''
@@ -575,11 +640,29 @@ export default class GameSceneV3 extends Phaser.Scene {
   private updateFloorDisplay() {
     if (!this.floorDisplayUI) return
 
-    const currentFloor = this.floorManager.getCurrentFloorNumber()
-    const currentStage = this.stageManager.getCurrentStageNumber()
+    let currentFloor: number
+    let subText: string
 
-    this.floorDisplayUI.floorText.setText(`FLOOR ${currentFloor}`)
-    this.floorDisplayUI.subText.setText(`Stage ${currentStage % 5 || 5}/5`)
+    if (this.isEndlessMode) {
+      currentFloor = endlessMode.getCurrentFloor()
+      subText = `Endless (Best: ${endlessMode.getBestFloor()})`
+    } else if (this.activeChallengeMode) {
+      currentFloor = this.activeChallengeMode.settings.bossesOnly
+        ? this.bossRushBossIndex + 1
+        : this.floorManager.getCurrentFloorNumber()
+      subText = this.activeChallengeMode.name
+    } else {
+      currentFloor = this.floorManager.getCurrentFloorNumber()
+      const currentStage = this.stageManager.getCurrentStageNumber()
+      subText = `Stage ${currentStage % 5 || 5}/5`
+    }
+
+    this.floorDisplayUI.floorText.setText(
+      this.activeChallengeMode?.settings.bossesOnly
+        ? `BOSS ${currentFloor}/15`
+        : `FLOOR ${currentFloor}`
+    )
+    this.floorDisplayUI.subText.setText(subText)
 
     // Color coding based on floor difficulty
     if (currentFloor >= 20) {
@@ -994,26 +1077,23 @@ export default class GameSceneV3 extends Phaser.Scene {
       }
     })
 
-    // ROGUELIKE: Ability Hotbar (keys 1-9)!
+    // WEAPON SWITCHING (keys 1-3) - switch between class weapon pool
     this.input.keyboard!.on('keydown-ONE', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
-        if (this.player.canDash()) {
-          this.player.performDash()
-        }
+        this.player.switchWeapon(0)
+        this.emitGameEvent('weaponSwitch', { slot: 0, weapons: this.player.classWeapons })
       }
     })
     this.input.keyboard!.on('keydown-TWO', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
-        if (this.player.canActivateShield()) {
-          this.player.activateShield()
-        }
+        this.player.switchWeapon(1)
+        this.emitGameEvent('weaponSwitch', { slot: 1, weapons: this.player.classWeapons })
       }
     })
     this.input.keyboard!.on('keydown-THREE', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen) {
-        if (this.player.canActivateTimeSlow()) {
-          this.player.activateTimeSlow()
-        }
+        this.player.switchWeapon(2)
+        this.emitGameEvent('weaponSwitch', { slot: 2, weapons: this.player.classWeapons })
       }
     })
     this.input.keyboard!.on('keydown-FOUR', () => {
@@ -1301,6 +1381,9 @@ export default class GameSceneV3 extends Phaser.Scene {
       console.warn('Visual effects update error:', e)
     }
 
+    // Update visibility overlay for fog/dark modifiers
+    this.updateVisibilityOverlay()
+
     // ROGUELIKE: Update enemy locators
     this.updateEnemyLocators()
   }
@@ -1393,8 +1476,28 @@ export default class GameSceneV3 extends Phaser.Scene {
 
   // DOTSLAYER: Load procedurally generated floor
   private loadFloor() {
-    const floor = this.floorManager.getCurrentFloor()
-    const floorNum = this.floorManager.getCurrentFloorNumber()
+    // CHALLENGE MODE: Boss Rush skips regular floors
+    if (this.activeChallengeMode?.settings.bossesOnly) {
+      this.loadBossRushFloor()
+      return
+    }
+
+    // CHALLENGE MODE: Survival uses continuous spawning
+    if (this.activeChallengeMode?.settings.enemySpawnContinuous) {
+      this.loadSurvivalFloor()
+      return
+    }
+
+    // ENDLESS MODE: Use endless scaling config
+    let floor: FloorConfig
+    let floorNum: number
+    if (this.isEndlessMode) {
+      floor = endlessMode.getFloorConfig()
+      floorNum = endlessMode.getCurrentFloor()
+    } else {
+      floor = this.floorManager.getCurrentFloor()
+      floorNum = this.floorManager.getCurrentFloorNumber()
+    }
 
     // Clear everything
     this.enemies.clear(true, true)
@@ -1420,6 +1523,16 @@ export default class GameSceneV3 extends Phaser.Scene {
     }
     this.activeModifierEffects = combineModifierEffects(this.activeFloorModifiers)
 
+    // Pass modifier effects to player for damage/speed/fire rate
+    this.player.modifierEffects = this.activeModifierEffects
+
+    // Apply player HP modifier (glass cannon / juggernaut)
+    if (this.activeModifierEffects.playerHPMult && this.activeModifierEffects.playerHPMult !== 1) {
+      const hpMult = this.activeModifierEffects.playerHPMult
+      this.player.maxHealth = Math.floor(this.player.maxHealth * hpMult)
+      this.player.health = Math.min(this.player.health, this.player.maxHealth)
+    }
+
     // Apply enemy count modifier
     const enemyCountMult = this.activeModifierEffects.enemyCountMult || 1
     this.totalEnemies = Math.floor(floor.enemyCount * enemyCountMult)
@@ -1427,7 +1540,16 @@ export default class GameSceneV3 extends Phaser.Scene {
     // Show modifier banner if any active
     if (this.activeFloorModifiers.length > 0) {
       this.showModifierBanner(this.activeFloorModifiers)
+      // Dispatch modifiers to HUD
+      this.emitGameEvent('floorModifiers', this.activeFloorModifiers.map(m => ({
+        name: m.name, icon: m.icon, category: m.category, description: m.description
+      })))
+    } else {
+      this.emitGameEvent('floorModifiers', [])
     }
+
+    // Apply visibility modifier (fog of war / dark floor)
+    this.applyVisibilityModifier()
 
     // Setup explosion timer for explosive floor modifier
     if (this.explosionTimer) {
@@ -1497,6 +1619,198 @@ export default class GameSceneV3 extends Phaser.Scene {
     }
   }
 
+  // ═══════════════════════════════════════
+  // CHALLENGE MODE: Boss Rush
+  // ═══════════════════════════════════════
+  private loadBossRushFloor() {
+    // Clear existing enemies
+    this.enemies.clear(true, true)
+    this.bosses.clear(true, true)
+    this.itemDrops.clear(true, true)
+
+    this.enemiesKilled = 0
+    this.bossSpawned = true
+    this.stageCompleted = false
+    this.totalEnemies = 0 // Only boss matters
+
+    // No floor modifiers in boss rush
+    this.activeFloorModifiers = []
+    this.activeModifierEffects = {}
+    this.player.modifierEffects = {}
+
+    const bossTypes: BossType[] = ['tank', 'speed', 'sniper', 'healer', 'mega']
+    const bossIndex = this.bossRushBossIndex
+
+    if (bossIndex >= 15) {
+      // All 15 bosses defeated! Challenge complete!
+      const record = challengeModes.endChallenge(true)
+      this.addKillFeedMessage(`👹 BOSS RUSH COMPLETE! ${record?.details || ''}`, '#2ecc71', 8000)
+      this.gameWon()
+      return
+    }
+
+    // Cycle through boss types
+    const bossType = bossTypes[bossIndex % bossTypes.length]
+    const bossX = this.worldWidth / 2
+    const bossY = this.worldHeight / 2
+
+    const boss = new Boss(this, bossX, bossY, bossType)
+    // Scale boss with index
+    const healthMultiplier = 1 + (bossIndex * 0.3)
+    boss.health *= healthMultiplier
+    boss.maxHealth = boss.health
+    this.bosses.add(boss)
+
+    this.addKillFeedMessage(`👹 BOSS ${bossIndex + 1}/15 — ${bossType.toUpperCase()}!`, '#ff0266', 5000)
+
+    // Dispatch challenge progress to HUD
+    this.emitGameEvent('challengeProgress', {
+      mode: 'boss_rush',
+      current: bossIndex + 1,
+      total: 15,
+      label: `Boss ${bossIndex + 1}/15`
+    })
+
+    // Re-render background
+    this.createInitialBackground()
+  }
+
+  // ═══════════════════════════════════════
+  // CHALLENGE MODE: Survival
+  // ═══════════════════════════════════════
+  private loadSurvivalFloor() {
+    // Clear existing enemies
+    this.enemies.clear(true, true)
+    this.bosses.clear(true, true)
+    this.itemDrops.clear(true, true)
+
+    this.enemiesKilled = 0
+    this.bossSpawned = false
+    this.stageCompleted = false
+    this.totalEnemies = 999999 // Never "complete" - survive until death
+
+    // No floor modifiers in survival
+    this.activeFloorModifiers = []
+    this.activeModifierEffects = {}
+    this.player.modifierEffects = {}
+
+    // Re-render background
+    this.createInitialBackground()
+
+    this.addKillFeedMessage('💀 SURVIVAL — Enemies never stop!', '#9b59b6', 5000)
+
+    // Start continuous enemy spawning
+    this.startSurvivalSpawning()
+  }
+
+  private startSurvivalSpawning() {
+    if (this.survivalSpawnTimer) this.survivalSpawnTimer.remove()
+
+    const allEnemyTypes = [
+      EnemyType.GRUNT, EnemyType.SCOUT, EnemyType.TANK, EnemyType.SNIPER,
+      EnemyType.BERSERKER, EnemyType.ASSASSIN, EnemyType.BOMBER, EnemyType.HEALER,
+      EnemyType.SHIELDER, EnemyType.TELEPORTER
+    ]
+
+    this.survivalSpawnTimer = this.time.addEvent({
+      delay: this.survivalSpawnInterval,
+      callback: () => {
+        if (this.isGameOver) return
+
+        // Spawn 2-5 enemies at a time
+        const count = Phaser.Math.Between(2, 5)
+        for (let i = 0; i < count; i++) {
+          const x = Phaser.Math.Between(200, this.worldWidth - 200)
+          const y = Phaser.Math.Between(200, this.worldHeight - 200)
+          const distToPlayer = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y)
+          if (distToPlayer < 300) continue
+
+          const type = Phaser.Math.RND.pick(allEnemyTypes)
+          const enemy = new AdvancedEnemy(this, x, y, type)
+
+          // Scale HP with time survived
+          const elapsed = challengeModes.getElapsedTime()
+          const timeMult = 1 + (elapsed / 60000) * 0.5 // +50% HP per minute
+          enemy.health *= timeMult
+          enemy.maxHealth = enemy.health
+
+          this.enemies.add(enemy)
+        }
+
+        // Speed up spawning over time (min 500ms)
+        this.survivalSpawnInterval = Math.max(500, this.survivalSpawnInterval - 50)
+
+        // Dispatch survival stats to HUD
+        this.emitGameEvent('challengeProgress', {
+          mode: 'survival',
+          kills: challengeModes.getCurrentKills(),
+          elapsed: challengeModes.getElapsedTime(),
+          label: `${challengeModes.getCurrentKills()} kills`
+        })
+      },
+      loop: true
+    })
+  }
+
+  // ═══════════════════════════════════════
+  // VISIBILITY MODIFIER (Fog of War / Dark Floor)
+  // ═══════════════════════════════════════
+  private applyVisibilityModifier() {
+    // Remove existing overlay
+    if (this.visibilityOverlay) {
+      this.visibilityOverlay.destroy()
+      this.visibilityOverlay = null
+    }
+
+    const radius = this.activeModifierEffects.visibilityRadius
+    if (!radius) return
+
+    // Create a dark overlay with a circular hole around the player
+    this.visibilityOverlay = this.add.graphics().setDepth(4500)
+
+    // Update it every frame in the update loop
+  }
+
+  private updateVisibilityOverlay() {
+    if (!this.visibilityOverlay || !this.activeModifierEffects.visibilityRadius) return
+
+    const radius = this.activeModifierEffects.visibilityRadius
+    this.visibilityOverlay.clear()
+
+    // Dark overlay covering the entire screen
+    this.visibilityOverlay.fillStyle(0x000000, 0.85)
+    this.visibilityOverlay.fillRect(
+      this.cameras.main.scrollX - 100,
+      this.cameras.main.scrollY - 100,
+      this.cameras.main.width + 200,
+      this.cameras.main.height + 200
+    )
+
+    // Cut a circular hole around the player
+    this.visibilityOverlay.fillStyle(0x000000, 0)
+    // Use blend mode to cut hole - approximate with gradient circles
+    const steps = 10
+    for (let i = steps; i >= 0; i--) {
+      const r = radius * (i / steps)
+      const alpha = i === 0 ? 0 : (1 - i / steps) * 0.85
+      this.visibilityOverlay.fillStyle(0x000000, alpha)
+      this.visibilityOverlay.fillCircle(this.player.x, this.player.y, r)
+    }
+    // Clear center completely
+    this.visibilityOverlay.fillStyle(0x0a1929, 1)
+    this.visibilityOverlay.fillCircle(this.player.x, this.player.y, radius * 0.4)
+
+    // If enemies glow, make them visible through fog
+    if (this.activeModifierEffects.enemiesGlow) {
+      this.enemies.children.entries.forEach((enemy: any) => {
+        if (enemy.active && !enemy.glowApplied) {
+          enemy.setTint(0x00ff00)
+          enemy.glowApplied = true
+        }
+      })
+    }
+  }
+
   private renderFloorLayout(floor: FloorConfig) {
     // Floor layout is generated but NOT rendered visually
     // Rooms exist for enemy spawning logic but players see open space
@@ -1505,6 +1819,21 @@ export default class GameSceneV3 extends Phaser.Scene {
 
   private spawnFloorEnemies(floor: FloorConfig) {
     const { enemyTypes, enemyCount, difficultyMultiplier } = floor
+
+    // Get modifier effects for enemy scaling
+    const hpMult = this.activeModifierEffects.enemyHPMult || 1
+    const damageMult = this.activeModifierEffects.enemyDamageMult || 1
+    const speedMult = this.activeModifierEffects.enemySpeedMult || 1
+
+    // Endless mode HP/damage scaling
+    let endlessHPMult = 1
+    let endlessDamageMult = 1
+    if (this.isEndlessMode) {
+      endlessHPMult = endlessMode.getHPMultiplier()
+      endlessDamageMult = endlessMode.getDamageMultiplier()
+    }
+
+    // Challenge mode gold/XP multipliers are applied in handleEnemyDeath
 
     // Spawn enemies in open world (simple and reliable!)
     for (let i = 0; i < enemyCount; i++) {
@@ -1526,6 +1855,18 @@ export default class GameSceneV3 extends Phaser.Scene {
       if (difficultyMultiplier > 1) {
         enemy.health *= difficultyMultiplier
         enemy.maxHealth = enemy.health
+      }
+
+      // Apply modifier effects to enemy stats
+      if (hpMult !== 1 || endlessHPMult !== 1) {
+        enemy.health *= hpMult * endlessHPMult
+        enemy.maxHealth = enemy.health
+      }
+      if (damageMult !== 1 || endlessDamageMult !== 1) {
+        enemy.damage = (enemy.damage || 10) * damageMult * endlessDamageMult
+      }
+      if (speedMult !== 1) {
+        enemy.speed = (enemy.speed || 100) * speedMult
       }
 
       this.enemies.add(enemy)
@@ -1947,12 +2288,25 @@ export default class GameSceneV3 extends Phaser.Scene {
       this.powerUpManager.tryDropPowerUp(enemy.x, enemy.y)
 
       // Drop item chance (DotSlayer loot system!)
-      const currentFloor = this.floorManager.getCurrentFloorNumber()
-      const dropChance = this.floorManager.getCurrentFloor().itemDropChance
-      const item = rollItemDrop(currentFloor, dropChance)
-      if (item) {
-        const itemDrop = new ItemDrop(this, enemy.x, enemy.y, item)
-        this.itemDrops.add(itemDrop)
+      // Check noDrops modifier
+      if (!this.activeModifierEffects.noDrops) {
+        const currentFloor = this.isEndlessMode ? endlessMode.getCurrentFloor() : this.floorManager.getCurrentFloorNumber()
+        let dropChance = this.isEndlessMode
+          ? Math.min(0.85, 0.3 + currentFloor * 0.005)
+          : this.floorManager.getCurrentFloor().itemDropChance
+        // Apply item drop multiplier from modifiers
+        if (this.activeModifierEffects.itemDropMult) {
+          dropChance *= this.activeModifierEffects.itemDropMult
+        }
+        // Apply set bonus item drop multiplier
+        if (this.activeSetEffects.itemDropMult) {
+          dropChance *= this.activeSetEffects.itemDropMult
+        }
+        const item = rollItemDrop(currentFloor, dropChance)
+        if (item) {
+          const itemDrop = new ItemDrop(this, enemy.x, enemy.y, item)
+          this.itemDrops.add(itemDrop)
+        }
       }
 
       // ENHANCED DEATH EFFECTS - using new visual effects system! (with safety checks)
@@ -2115,9 +2469,31 @@ export default class GameSceneV3 extends Phaser.Scene {
         // Silently ignore visual effect errors
       }
 
+      // INFINITE HORIZONS: Track boss kills for challenge mode
+      if (this.activeChallengeMode) {
+        challengeModes.recordKill(true)
+      }
+
       // Epic kill feed message
       this.addKillFeedMessage(`💀 BOSS DEFEATED! 💀`, '#ff0000', 5000)
       this.addKillFeedMessage(`+$${money} +${xp}XP +1 SKILL POINT`, '#ffd700', 5000)
+
+      // Boss Rush: advance to next boss after brief rest
+      if (this.activeChallengeMode?.settings.bossesOnly) {
+        this.bossRushBossIndex++
+        // Heal between bosses (25%)
+        if (this.activeChallengeMode.settings.healBetweenWaves) {
+          const healPct = this.activeChallengeMode.settings.healBetweenWaves / 100
+          this.player.health = Math.min(
+            this.player.maxHealth,
+            this.player.health + Math.floor(this.player.maxHealth * healPct)
+          )
+          this.addKillFeedMessage(`💗 Healed ${this.activeChallengeMode.settings.healBetweenWaves}%!`, '#2ecc71', 3000)
+        }
+        this.bossRushRestTimer = this.time.delayedCall(3000, () => {
+          this.loadBossRushFloor()
+        })
+      }
 
       // Ping boss death location on minimap (with safety check)
       try {
@@ -2151,12 +2527,19 @@ export default class GameSceneV3 extends Phaser.Scene {
   }
 
   private collectItemDrop(player: any, itemDrop: any) {
+    const item = itemDrop.getItem()
+
+    // Check noHealthPickups modifier - skip health items
+    if (this.activeModifierEffects.noHealthPickups) {
+      if (item.id.startsWith('health_')) return
+    }
+
     // Play collect sound
     this.audioManager.playSound('upgrade')
 
     // Track item collection
     this.itemsCollectedThisRun++
-    if (itemDrop.getItem().rarity === ItemRarity.LEGENDARY) {
+    if (item.rarity === ItemRarity.LEGENDARY) {
       this.legendariesCollectedThisRun++
 
       // Enhanced particles for legendary drops!
@@ -2165,6 +2548,42 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     // Collect the item (applies effect and shows message)
     itemDrop.collect(player)
+
+    // Track collected item IDs for set bonuses
+    if (item.id && !this.collectedItemIds.includes(item.id)) {
+      this.collectedItemIds.push(item.id)
+    }
+
+    // Recalculate set bonuses
+    this.activeSetEffects = getCombinedSetEffects(this.collectedItemIds)
+    this.player.activeSetEffects = this.activeSetEffects
+
+    // Check for auto-revive unlock
+    if (this.activeSetEffects.autoRevive) {
+      this.hasAutoRevive = true
+    }
+
+    // Apply max HP set bonus
+    if (this.activeSetEffects.maxHPMult && this.activeSetEffects.maxHPMult > 1) {
+      const baseHP = this.player.maxHealth
+      const newHP = Math.floor(baseHP * this.activeSetEffects.maxHPMult)
+      if (newHP > this.player.maxHealth) {
+        this.player.maxHealth = newHP
+        this.player.health = Math.min(this.player.health + (newHP - baseHP), newHP)
+      }
+    }
+
+    // Dispatch set progress to HUD
+    const setProgress = getActiveSetBonuses(this.collectedItemIds)
+    if (setProgress.length > 0) {
+      this.emitGameEvent('setProgress', setProgress.map(s => ({
+        name: s.set.name,
+        icon: s.set.icon,
+        pieces: s.piecesOwned,
+        total: s.set.itemIds.length,
+        bonuses: s.activeBonuses.map(b => b.description)
+      })))
+    }
 
     // Check achievements after collecting
     this.checkAchievementsProgress()
@@ -2259,6 +2678,11 @@ export default class GameSceneV3 extends Phaser.Scene {
   }
 
   private checkStageCompletion() {
+    // Survival mode never "completes" — play until death
+    if (this.activeChallengeMode?.settings.enemySpawnContinuous) return
+    // Boss Rush handles progression via boss death handler
+    if (this.activeChallengeMode?.settings.bossesOnly) return
+
     // Check floor completion
     if (this.enemiesKilled >= this.totalEnemies && this.bosses.children.size === 0) {
       this.completeFloor()
@@ -2287,8 +2711,19 @@ export default class GameSceneV3 extends Phaser.Scene {
     dailyChallengeManager.updateProgress('floors', 1)
 
     // Floor completion rewards (scaled by floor)
-    const moneyReward = 100 + (floorNum * 50)
-    const xpReward = 50 + (floorNum * 25)
+    let moneyReward = 100 + (floorNum * 50)
+    let xpReward = 50 + (floorNum * 25)
+
+    // Apply goldOnClear modifier (e.g., Barren: 5x gold on clear)
+    if (this.activeModifierEffects.goldOnClear) {
+      moneyReward = Math.floor(moneyReward * this.activeModifierEffects.goldOnClear)
+    }
+
+    // Apply challenge mode multipliers to floor rewards
+    if (this.activeChallengeMode) {
+      moneyReward = Math.floor(moneyReward * this.activeChallengeMode.settings.goldMult)
+      xpReward = Math.floor(xpReward * this.activeChallengeMode.settings.xpMult)
+    }
 
     this.player.addMoney(moneyReward)
     this.player.addXP(xpReward)
@@ -2317,6 +2752,18 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     // Auto-save on floor completion (important checkpoint!)
     this.performAutoSave()
+
+    // Speed Run: check if target floor count reached
+    if (this.activeChallengeMode?.id === 'speed_run' && this.activeChallengeMode.settings.floorCount) {
+      if (floorNum >= this.activeChallengeMode.settings.floorCount) {
+        // Speed run complete!
+        if (this.challengeTimerEvent) this.challengeTimerEvent.remove()
+        const record = challengeModes.endChallenge(true, floorNum)
+        this.addKillFeedMessage(`⏱️ SPEED RUN COMPLETE! ${record?.details || ''}`, '#2ecc71', 8000)
+        this.gameWon()
+        return
+      }
+    }
 
     // Check if more floors
     if (this.isEndlessMode) {
@@ -3064,6 +3511,17 @@ export default class GameSceneV3 extends Phaser.Scene {
   private gameOver() {
     // Prevent multiple game over calls
     if (this.isGameOver) return
+
+    // GUARDIAN SET: Auto-revive with 30% HP
+    if (this.hasAutoRevive) {
+      this.hasAutoRevive = false // One-time use
+      const reviveHP = Math.floor(this.player.maxHealth * (this.activeSetEffects.autoReviveHPPct || 30) / 100)
+      this.player.health = reviveHP
+      this.addKillFeedMessage('🛡️ GUARDIAN SET — Auto-Revive!', '#2ecc71', 5000)
+      this.cameras.main.flash(500, 46, 204, 113)
+      return
+    }
+
     this.isGameOver = true
 
     // Stop all physics and game systems
@@ -3072,6 +3530,29 @@ export default class GameSceneV3 extends Phaser.Scene {
     // Play death sound and stop music
     this.audioManager.playSound('death')
     this.audioManager.stopMusic()
+
+    // Stop challenge/survival timers
+    if (this.challengeTimerEvent) this.challengeTimerEvent.remove()
+    if (this.survivalSpawnTimer) this.survivalSpawnTimer.remove()
+    if (this.bossRushRestTimer) this.bossRushRestTimer.remove()
+
+    // INFINITE HORIZONS: End challenge mode and save records
+    if (this.activeChallengeMode) {
+      const mode = this.activeChallengeMode.id
+      let additionalScore = 0
+      if (mode === 'hardcore' || mode === 'speed_run') {
+        additionalScore = this.floorManager.getCurrentFloorNumber()
+      }
+      const record = challengeModes.endChallenge(false, additionalScore)
+      if (record) {
+        this.addKillFeedMessage(`📊 ${this.activeChallengeMode.name}: ${record.details}`, '#f39c12', 8000)
+      }
+    }
+
+    // INFINITE HORIZONS: End endless mode run
+    if (this.isEndlessMode) {
+      endlessMode.endRun()
+    }
 
     // Save cross-game synergy stats
     this.saveSynergyStats(false)
@@ -3105,6 +3586,26 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     // Stop all physics
     this.physics.pause()
+
+    // Stop challenge timers
+    if (this.challengeTimerEvent) this.challengeTimerEvent.remove()
+    if (this.survivalSpawnTimer) this.survivalSpawnTimer.remove()
+    if (this.bossRushRestTimer) this.bossRushRestTimer.remove()
+
+    // End challenge mode if active (victory)
+    if (this.activeChallengeMode) {
+      const mode = this.activeChallengeMode.id
+      let additionalScore = 0
+      if (mode === 'speed_run') {
+        additionalScore = this.floorManager.getCurrentFloorNumber()
+      }
+      challengeModes.endChallenge(true, additionalScore)
+    }
+
+    // End endless mode if active
+    if (this.isEndlessMode) {
+      endlessMode.endRun()
+    }
 
     // Save cross-game synergy stats - VICTORY!
     this.saveSynergyStats(true)
@@ -3322,9 +3823,18 @@ export default class GameSceneV3 extends Phaser.Scene {
       endlessMode.recordKills(1)
     }
 
-    // Award money and XP (apply modifier multipliers)
-    const goldMult = this.activeModifierEffects.goldMult || 1
-    const xpMult = this.activeModifierEffects.xpMult || 1
+    // Award money and XP (apply modifier + challenge mode multipliers)
+    let goldMult = this.activeModifierEffects.goldMult || 1
+    let xpMult = this.activeModifierEffects.xpMult || 1
+    // Stack challenge mode multipliers
+    if (this.activeChallengeMode) {
+      goldMult *= this.activeChallengeMode.settings.goldMult
+      xpMult *= this.activeChallengeMode.settings.xpMult
+    }
+    // Stack set bonus gold multiplier
+    if (this.activeSetEffects.goldMult) {
+      goldMult *= this.activeSetEffects.goldMult
+    }
     const money = Math.floor((enemy.reward || 50) * goldMult)
     const xp = Math.floor((enemy.xpReward || Math.floor((enemy.reward || 50) / 2)) * xpMult)
     this.player.addMoney(money)
@@ -4469,14 +4979,66 @@ export default class GameSceneV3 extends Phaser.Scene {
       floorType = 'Treasure Floor'
     }
 
+    // Adjust floor display for special modes
+    let displayFloor = floorNum
+    let missionTitle = `FLOOR ${floorNum} - ${floorType}`
+    let missionObjective = 'Clear all enemies to proceed'
+    let missionProgress = `${this.enemiesKilled} / ${this.totalEnemies} enemies`
+
+    if (this.isEndlessMode) {
+      displayFloor = endlessMode.getCurrentFloor()
+      missionTitle = `ENDLESS FLOOR ${displayFloor}`
+      missionObjective = 'Survive and climb!'
+      missionProgress = `${this.enemiesKilled} / ${this.totalEnemies} enemies`
+    }
+
+    if (this.activeChallengeMode) {
+      const mode = this.activeChallengeMode
+      if (mode.settings.bossesOnly) {
+        missionTitle = `${mode.icon} ${mode.name}`
+        missionObjective = `Boss ${this.bossRushBossIndex + 1} of 15`
+        missionProgress = `${challengeModes.getCurrentBossesDefeated()} bosses defeated`
+      } else if (mode.settings.enemySpawnContinuous) {
+        missionTitle = `${mode.icon} ${mode.name}`
+        missionObjective = 'Survive as long as possible!'
+        missionProgress = `${challengeModes.getCurrentKills()} kills`
+      } else if (mode.settings.timeLimit) {
+        const remaining = Math.max(0, this.challengeTimeRemaining)
+        const mins = Math.floor(remaining / 60000)
+        const secs = Math.floor((remaining % 60000) / 1000)
+        missionTitle = `${mode.icon} ${mode.name}`
+        missionObjective = `${mins}:${secs.toString().padStart(2, '0')} remaining`
+        missionProgress = `Floor ${floorNum} / ${mode.settings.floorCount || 50}`
+      } else {
+        missionTitle = `${mode.icon} ${mode.name} - Floor ${floorNum}`
+      }
+    }
+
     const mission = {
-      title: `FLOOR ${floorNum} - ${floorType}`,
-      objective: 'Clear all enemies to proceed',
-      progress: `${this.enemiesKilled} / ${this.totalEnemies} enemies`,
+      title: missionTitle,
+      objective: missionObjective,
+      progress: missionProgress,
     }
 
     this.emitGameEvent('statsUpdate', stats)
     this.emitGameEvent('missionUpdate', mission)
+
+    // Dispatch weapon mastery info periodically
+    try {
+      const weaponName = this.player.getCurrentWeaponName()
+      const mastery = weaponMastery.getBonus(weaponName)
+      this.emitGameEvent('weaponMastery', {
+        weapon: weaponName,
+        rank: mastery.rank.name,
+        rankIcon: mastery.rank.icon,
+        rankColor: mastery.rank.color,
+        kills: mastery.kills,
+        nextRank: mastery.nextRank?.name || 'MAX',
+        killsToNext: mastery.killsToNextRank,
+        damageMult: mastery.damageMult,
+        fireRateMult: mastery.fireRateMult
+      })
+    } catch (e) { /* ignore */ }
   }
 
   private emitGameEvent(type: string, data: any) {
