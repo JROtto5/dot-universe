@@ -211,7 +211,7 @@ export default class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     // Subtitle
-    const subtitle = this.add.text(width / 2, 140, '100 FLOORS CHALLENGE', {
+    const subtitle = this.add.text(width / 2, 140, '150 FLOORS CHALLENGE', {
       fontSize: '28px',
       color: `#${COLORS.accent2.toString(16).padStart(6, '0')}`,
       stroke: '#000000',

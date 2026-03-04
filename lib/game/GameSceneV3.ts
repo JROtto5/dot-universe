@@ -75,6 +75,7 @@ export default class GameSceneV3 extends Phaser.Scene {
   private skillTreeUI: any = null
   private pauseMenuUI: any[] = []
   private isPaused = false
+  private isGameOver = false
   private autoSaveTimer: Phaser.Time.TimerEvent | null = null
   private lastAutoSave = 0
   private skillTreeScrollOffset = 0
@@ -131,6 +132,9 @@ export default class GameSceneV3 extends Phaser.Scene {
   }
 
   create() {
+    // Reset game over state on scene restart
+    this.isGameOver = false
+
     // Load UI settings from localStorage
     this.loadUISettings()
 
@@ -1151,6 +1155,9 @@ export default class GameSceneV3 extends Phaser.Scene {
   }
 
   update(time: number, delta: number) {
+    // Stop all game logic when game is over
+    if (this.isGameOver) return
+
     // FIX V8: Block ALL input when any UI is open!
     const uiOpen = this.skillTreeUI || this.shopUI.isShopOpen() || this.casinoUI.isOpen
 
@@ -2877,6 +2884,13 @@ export default class GameSceneV3 extends Phaser.Scene {
   }
 
   private gameOver() {
+    // Prevent multiple game over calls
+    if (this.isGameOver) return
+    this.isGameOver = true
+
+    // Stop all physics and game systems
+    this.physics.pause()
+
     // Play death sound and stop music
     this.audioManager.playSound('death')
     this.audioManager.stopMusic()
@@ -2907,6 +2921,13 @@ export default class GameSceneV3 extends Phaser.Scene {
   }
 
   private gameWon() {
+    // Prevent multiple calls
+    if (this.isGameOver) return
+    this.isGameOver = true
+
+    // Stop all physics
+    this.physics.pause()
+
     // Save cross-game synergy stats - VICTORY!
     this.saveSynergyStats(true)
 
@@ -4315,74 +4336,114 @@ export default class GameSceneV3 extends Phaser.Scene {
     const seconds = runTime % 60
     const timePlayed = runTime
 
+    // Screen shake on death
+    if (!victory) {
+      this.cameras.main.shake(500, 0.02)
+    }
+
+    // Brief delay for dramatic effect
+    await new Promise(resolve => this.time.delayedCall(victory ? 200 : 600, resolve))
+
     // Create container for all game over UI (easy cleanup)
     const gameOverContainer = this.add.container(0, 0).setDepth(25000).setScrollFactor(0)
 
-    // Full screen dark overlay with gradient effect
-    const overlay = this.add.rectangle(centerX, centerY, screenWidth, screenHeight, 0x000000, 0.97)
+    // Full screen dark overlay
+    const overlay = this.add.rectangle(centerX, centerY, screenWidth, screenHeight, 0x000000, 0.92)
     gameOverContainer.add(overlay)
 
-    // Decorative top bar
-    const topBar = this.add.rectangle(centerX, 30, screenWidth, 60, 0x1a1a2e)
-    gameOverContainer.add(topBar)
+    // Accent color based on victory/defeat
+    const accentColor = victory ? 0x2ecc71 : 0xe74c3c
+    const accentHex = victory ? '#2ecc71' : '#e74c3c'
+    const accentGlow = victory ? 0x27ae60 : 0xc0392b
 
-    // Main panel background
-    const panelWidth = Math.min(500, screenWidth - 40)
-    const panelHeight = Math.min(450, screenHeight - 80)
+    // Decorative top accent line
+    const topLine = this.add.rectangle(centerX, 3, screenWidth, 6, accentColor)
+    gameOverContainer.add(topLine)
+
+    // Main panel
+    const panelWidth = Math.min(520, screenWidth - 40)
+    const panelHeight = Math.min(520, screenHeight - 60)
+
+    // Panel outer glow
+    const outerGlow = this.add.rectangle(centerX, centerY, panelWidth + 8, panelHeight + 8, accentGlow, 0.15)
+    gameOverContainer.add(outerGlow)
+
+    // Panel background
     const panel = this.add.rectangle(centerX, centerY, panelWidth, panelHeight, 0x0d1117)
-      .setStrokeStyle(2, victory ? 0x2ecc71 : 0xe74c3c)
+      .setStrokeStyle(2, accentColor, 0.8)
     gameOverContainer.add(panel)
 
-    // Inner glow effect
-    const innerGlow = this.add.rectangle(centerX, centerY, panelWidth - 4, panelHeight - 4, 0x161b22)
-    gameOverContainer.add(innerGlow)
+    // Inner panel
+    const innerPanel = this.add.rectangle(centerX, centerY, panelWidth - 6, panelHeight - 6, 0x161b22)
+    gameOverContainer.add(innerPanel)
 
-    // Title with icon
-    const titleColor = victory ? '#2ecc71' : '#e74c3c'
+    // --- TITLE ---
     const titleIcon = victory ? '🏆' : '💀'
     const titleText = victory ? 'VICTORY' : 'GAME OVER'
 
-    const title = this.add.text(centerX, centerY - 180, `${titleIcon} ${titleText}`, {
-      fontSize: '36px',
-      color: titleColor,
+    const title = this.add.text(centerX, centerY - panelHeight/2 + 50, `${titleIcon} ${titleText}`, {
+      fontSize: '42px',
+      color: accentHex,
       fontFamily: 'Arial Black, sans-serif',
       stroke: '#000000',
-      strokeThickness: 4
+      strokeThickness: 6
     }).setOrigin(0.5)
     gameOverContainer.add(title)
 
-    // Score display with glow
-    const scoreDisplay = this.add.text(centerX, centerY - 130, `SCORE: $${score.toLocaleString()}`, {
+    // Pulsing title glow
+    this.tweens.add({
+      targets: title,
+      scale: { from: 1, to: 1.03 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    })
+
+    // --- SCORE ---
+    const scoreDisplay = this.add.text(centerX, centerY - panelHeight/2 + 100, `SCORE: $${score.toLocaleString()}`, {
       fontSize: '28px',
-      color: '#f39c12',
+      color: '#ffd700',
       fontFamily: 'Arial, sans-serif',
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3
     }).setOrigin(0.5)
     gameOverContainer.add(scoreDisplay)
 
-    // Stats grid - modern card style
-    const statsStartY = centerY - 80
+    // --- STATS GRID ---
+    const statsStartY = centerY - panelHeight/2 + 150
     const stats = [
       { icon: '⏱️', label: 'Time', value: `${minutes}:${seconds.toString().padStart(2, '0')}`, color: '#3498db' },
-      { icon: '🎯', label: 'Kills', value: this.runStats.totalKills.toString(), color: '#e74c3c' },
+      { icon: '🎯', label: 'Kills', value: this.runStats.totalKills.toLocaleString(), color: '#e74c3c' },
       { icon: '👑', label: 'Bosses', value: this.runStats.bossesKilled.toString(), color: '#f39c12' },
       { icon: '🔥', label: 'Combo', value: `${this.runStats.highestCombo}x`, color: '#e67e22' },
-      { icon: '📊', label: 'Floor', value: this.runStats.stagesCompleted.toString(), color: '#9b59b6' },
+      { icon: '📊', label: 'Floor', value: `${this.runStats.stagesCompleted}/150`, color: '#9b59b6' },
       { icon: '⚔️', label: 'Level', value: this.player.level.toString(), color: '#1abc9c' },
     ]
 
+    const cardW = 130
+    const cardH = 48
     stats.forEach((stat, i) => {
       const col = i % 3
       const row = Math.floor(i / 3)
-      const x = centerX - 140 + col * 140
-      const y = statsStartY + row * 50
+      const x = centerX - cardW - 10 + col * (cardW + 10)
+      const y = statsStartY + row * (cardH + 8)
 
-      // Stat card background
-      const cardBg = this.add.rectangle(x, y, 120, 40, 0x21262d).setStrokeStyle(1, 0x30363d)
+      const cardBg = this.add.rectangle(x, y, cardW, cardH, 0x21262d)
+        .setStrokeStyle(1, 0x30363d)
       gameOverContainer.add(cardBg)
 
-      // Stat text
-      const statText = this.add.text(x, y, `${stat.icon} ${stat.value}`, {
+      // Label
+      const label = this.add.text(x, y - 10, stat.label.toUpperCase(), {
+        fontSize: '10px',
+        color: '#6e7681',
+        fontFamily: 'Arial, sans-serif'
+      }).setOrigin(0.5)
+      gameOverContainer.add(label)
+
+      // Value
+      const statText = this.add.text(x, y + 8, `${stat.icon} ${stat.value}`, {
         fontSize: '16px',
         color: stat.color,
         fontFamily: 'Arial, sans-serif',
@@ -4391,62 +4452,98 @@ export default class GameSceneV3 extends Phaser.Scene {
       gameOverContainer.add(statText)
     })
 
-    // Divider line
-    const divider = this.add.rectangle(centerX, centerY + 20, panelWidth - 60, 2, 0x30363d)
+    // --- DIVIDER ---
+    const dividerY = statsStartY + 2 * (cardH + 8) + 20
+    const divider = this.add.rectangle(centerX, dividerY, panelWidth - 80, 1, 0x30363d)
     gameOverContainer.add(divider)
 
-    // Action buttons
-    const btnY = centerY + 80
-    const btnWidth = 180
-    const btnHeight = 50
+    // --- ACTION BUTTONS ---
+    const btnStartY = dividerY + 40
+    const btnWidth = 220
+    const btnHeight = 54
 
-    // Play Again button (primary)
-    const playAgainBg = this.add.rectangle(centerX, btnY, btnWidth, btnHeight, 0x238636)
+    // Play Again button (primary - big and green)
+    const playBtnY = btnStartY
+    const playAgainBg = this.add.rectangle(centerX, playBtnY, btnWidth, btnHeight, 0x238636)
       .setStrokeStyle(2, 0x2ea043)
       .setInteractive({ useHandCursor: true })
     gameOverContainer.add(playAgainBg)
 
-    const playAgainText = this.add.text(centerX, btnY, '🎮 PLAY AGAIN', {
-      fontSize: '18px',
+    // Button glow
+    const playGlow = this.add.rectangle(centerX, playBtnY, btnWidth + 6, btnHeight + 6, 0x238636, 0.2)
+    gameOverContainer.add(playGlow)
+    // Re-add button on top of glow
+    gameOverContainer.bringToTop(playAgainBg)
+
+    const playAgainText = this.add.text(centerX, playBtnY, '🎮  PLAY AGAIN', {
+      fontSize: '20px',
       color: '#ffffff',
       fontFamily: 'Arial, sans-serif',
       fontStyle: 'bold'
     }).setOrigin(0.5)
     gameOverContainer.add(playAgainText)
 
-    playAgainBg.on('pointerover', () => playAgainBg.setFillStyle(0x2ea043))
-    playAgainBg.on('pointerout', () => playAgainBg.setFillStyle(0x238636))
+    // Pulsing glow on play button
+    this.tweens.add({
+      targets: playGlow,
+      alpha: { from: 0.2, to: 0.5 },
+      scale: { from: 1, to: 1.05 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    })
+
+    playAgainBg.on('pointerover', () => {
+      playAgainBg.setFillStyle(0x2ea043)
+      this.tweens.add({ targets: [playAgainBg, playAgainText], scale: 1.05, duration: 100 })
+    })
+    playAgainBg.on('pointerout', () => {
+      playAgainBg.setFillStyle(0x238636)
+      this.tweens.add({ targets: [playAgainBg, playAgainText], scale: 1, duration: 100 })
+    })
     playAgainBg.on('pointerdown', () => {
       gameOverContainer.destroy()
       this.scene.restart()
     })
 
     // Main Menu button (secondary)
-    const menuBg = this.add.rectangle(centerX, btnY + 60, btnWidth, btnHeight, 0x21262d)
-      .setStrokeStyle(2, 0x30363d)
+    const menuBtnY = playBtnY + 65
+    const menuBg = this.add.rectangle(centerX, menuBtnY, btnWidth, btnHeight - 6, 0x21262d)
+      .setStrokeStyle(1, 0x30363d)
       .setInteractive({ useHandCursor: true })
     gameOverContainer.add(menuBg)
 
-    const menuText = this.add.text(centerX, btnY + 60, 'MAIN MENU', {
-      fontSize: '16px',
+    const menuText = this.add.text(centerX, menuBtnY, '🏠  MAIN MENU', {
+      fontSize: '17px',
       color: '#8b949e',
       fontFamily: 'Arial, sans-serif',
       fontStyle: 'bold'
     }).setOrigin(0.5)
     gameOverContainer.add(menuText)
 
-    menuBg.on('pointerover', () => { menuBg.setFillStyle(0x30363d); menuText.setColor('#ffffff') })
-    menuBg.on('pointerout', () => { menuBg.setFillStyle(0x21262d); menuText.setColor('#8b949e') })
+    menuBg.on('pointerover', () => {
+      menuBg.setFillStyle(0x30363d)
+      menuBg.setStrokeStyle(1, 0x484f58)
+      menuText.setColor('#ffffff')
+      this.tweens.add({ targets: [menuBg, menuText], scale: 1.03, duration: 100 })
+    })
+    menuBg.on('pointerout', () => {
+      menuBg.setFillStyle(0x21262d)
+      menuBg.setStrokeStyle(1, 0x30363d)
+      menuText.setColor('#8b949e')
+      this.tweens.add({ targets: [menuBg, menuText], scale: 1, duration: 100 })
+    })
     menuBg.on('pointerdown', () => {
       gameOverContainer.destroy()
       this.scene.start('MenuScene')
     })
 
-    // Share section at bottom
-    const shareY = btnY + 140
-    const shareLabel = this.add.text(centerX, shareY, 'SHARE', {
-      fontSize: '12px',
-      color: '#6e7681',
+    // --- SHARE SECTION ---
+    const shareY = menuBtnY + 55
+    const shareLabel = this.add.text(centerX, shareY, '— SHARE —', {
+      fontSize: '11px',
+      color: '#484f58',
       fontFamily: 'Arial, sans-serif'
     }).setOrigin(0.5)
     gameOverContainer.add(shareLabel)
@@ -4456,55 +4553,64 @@ export default class GameSceneV3 extends Phaser.Scene {
       : `💀 Floor ${this.runStats.stagesCompleted} in DotSlayer | $${score.toLocaleString()}`
     const shareUrl = 'https://dotslayer.vercel.app'
 
-    // Share buttons
-    const shareBtnSize = 40
-    const shareSpacing = 55
+    const shareBtnSize = 36
+    const shareSpacing = 50
+    const shareBtnY = shareY + 28
 
-    // Twitter
-    const twitterBg = this.add.rectangle(centerX - shareSpacing, shareY + 30, shareBtnSize, shareBtnSize, 0x1da1f2)
+    // Twitter/X
+    const twitterBg = this.add.rectangle(centerX - shareSpacing, shareBtnY, shareBtnSize, shareBtnSize, 0x1a1a2e)
+      .setStrokeStyle(1, 0x1da1f2)
       .setInteractive({ useHandCursor: true })
     gameOverContainer.add(twitterBg)
-    const twitterIcon = this.add.text(centerX - shareSpacing, shareY + 30, '𝕏', {
-      fontSize: '18px', color: '#ffffff', fontStyle: 'bold'
+    const twitterIcon = this.add.text(centerX - shareSpacing, shareBtnY, '𝕏', {
+      fontSize: '16px', color: '#1da1f2', fontStyle: 'bold'
     }).setOrigin(0.5)
     gameOverContainer.add(twitterIcon)
 
-    twitterBg.on('pointerover', () => twitterBg.setFillStyle(0x1991da))
-    twitterBg.on('pointerout', () => twitterBg.setFillStyle(0x1da1f2))
+    twitterBg.on('pointerover', () => { twitterBg.setFillStyle(0x1da1f2); twitterIcon.setColor('#ffffff') })
+    twitterBg.on('pointerout', () => { twitterBg.setFillStyle(0x1a1a2e); twitterIcon.setColor('#1da1f2') })
     twitterBg.on('pointerdown', () => {
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage + '\n' + shareUrl)}`, '_blank')
     })
 
     // Reddit
-    const redditBg = this.add.rectangle(centerX, shareY + 30, shareBtnSize, shareBtnSize, 0xff4500)
+    const redditBg = this.add.rectangle(centerX, shareBtnY, shareBtnSize, shareBtnSize, 0x1a1a2e)
+      .setStrokeStyle(1, 0xff4500)
       .setInteractive({ useHandCursor: true })
     gameOverContainer.add(redditBg)
-    const redditIcon = this.add.text(centerX, shareY + 30, 'r/', {
-      fontSize: '14px', color: '#ffffff', fontStyle: 'bold'
+    const redditIcon = this.add.text(centerX, shareBtnY, 'r/', {
+      fontSize: '13px', color: '#ff4500', fontStyle: 'bold'
     }).setOrigin(0.5)
     gameOverContainer.add(redditIcon)
 
-    redditBg.on('pointerover', () => redditBg.setFillStyle(0xe63e00))
-    redditBg.on('pointerout', () => redditBg.setFillStyle(0xff4500))
+    redditBg.on('pointerover', () => { redditBg.setFillStyle(0xff4500); redditIcon.setColor('#ffffff') })
+    redditBg.on('pointerout', () => { redditBg.setFillStyle(0x1a1a2e); redditIcon.setColor('#ff4500') })
     redditBg.on('pointerdown', () => {
       window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareMessage)}`, '_blank')
     })
 
     // Copy
-    const copyBg = this.add.rectangle(centerX + shareSpacing, shareY + 30, shareBtnSize, shareBtnSize, 0x6e7681)
+    const copyBg = this.add.rectangle(centerX + shareSpacing, shareBtnY, shareBtnSize, shareBtnSize, 0x1a1a2e)
+      .setStrokeStyle(1, 0x6e7681)
       .setInteractive({ useHandCursor: true })
     gameOverContainer.add(copyBg)
-    const copyIcon = this.add.text(centerX + shareSpacing, shareY + 30, '📋', {
-      fontSize: '16px'
+    const copyIcon = this.add.text(centerX + shareSpacing, shareBtnY, '📋', {
+      fontSize: '14px'
     }).setOrigin(0.5)
     gameOverContainer.add(copyIcon)
 
-    copyBg.on('pointerover', () => copyBg.setFillStyle(0x8b949e))
-    copyBg.on('pointerout', () => copyBg.setFillStyle(0x6e7681))
+    copyBg.on('pointerover', () => { copyBg.setFillStyle(0x6e7681); copyIcon.setText('📋') })
+    copyBg.on('pointerout', () => copyBg.setFillStyle(0x1a1a2e))
     copyBg.on('pointerdown', () => {
       navigator.clipboard.writeText(`${shareMessage}\n${shareUrl}`)
       copyIcon.setText('✓')
-      this.time.delayedCall(1500, () => copyIcon.setText('📋'))
+      copyBg.setFillStyle(0x238636)
+      copyBg.setStrokeStyle(1, 0x2ea043)
+      this.time.delayedCall(1500, () => {
+        copyIcon.setText('📋')
+        copyBg.setFillStyle(0x1a1a2e)
+        copyBg.setStrokeStyle(1, 0x6e7681)
+      })
     })
 
     // Submit score to leaderboard in background
@@ -4546,13 +4652,22 @@ export default class GameSceneV3 extends Phaser.Scene {
       })
     }
 
-    // Animate panel entrance
+    // --- ENTRANCE ANIMATION ---
+    // Start with panel scaled down and faded
     gameOverContainer.setAlpha(0)
+    gameOverContainer.setScale(0.9)
     this.tweens.add({
       targets: gameOverContainer,
       alpha: 1,
-      duration: 300,
-      ease: 'Power2'
+      scale: 1,
+      duration: 400,
+      ease: 'Back.easeOut'
     })
+
+    // Flash screen with accent color
+    const r = (accentColor >> 16) & 0xff
+    const g = (accentColor >> 8) & 0xff
+    const b = accentColor & 0xff
+    this.cameras.main.flash(200, r, g, b, true)
   }
 }
