@@ -14,6 +14,41 @@ interface NewsItem {
 
 const NEWS_ITEMS: NewsItem[] = [
   {
+    id: 'infinite-horizons',
+    date: '2026-03-04',
+    title: 'INFINITE HORIZONS UPDATE - Massive New Systems!',
+    category: 'feature',
+    content: 'The biggest update yet! Introducing new game modes, floor modifiers, weapon mastery, item sets, clicker mini-games, research tree, and expanded cross-game synergy. The endgame just got infinite.',
+    highlights: [
+      'Floor Modifiers: 17 random modifiers change gameplay every floor — Swarm, Armored, Glass Cannon, Fog of War, Jackpot, and more!',
+      'Endless Mode: Infinite floors after beating the campaign. Difficulty scales forever with Ascended enemies',
+      '4 Challenge Modes: Boss Rush (fight all 15 bosses), Survival (infinite waves), Speed Run (50 floors in 30 min), Hardcore (1 HP, 10x rewards)',
+      'Weapon Mastery: Track kills with each weapon for permanent bonuses. 6 ranks from Novice to Grandmaster',
+      'Item Set Bonuses: 6 themed item sets with 2-piece and 3-piece bonuses including auto-revive and auto-turret',
+      'Clicker Mini-Games: Click Frenzy, Golden Rush, and Dot Storm trigger randomly every 5-10 minutes',
+      'Research Tree: 15 permanent upgrade nodes across 5 tiers purchased with Research Points from prestiges',
+      'Cross-Game Milestones: New Level 10, 25, and 50 milestone rewards with exclusive unlocks',
+      'Profile Expansion: New Weapon Mastery, Challenge Records, and Item Collection tabs',
+      'Hub Game Modes: Browse and launch all game modes from the hub',
+    ],
+  },
+  {
+    id: 'mar-4-content-expansion',
+    date: '2026-03-04',
+    title: 'Massive Content Expansion - 120+ New Items!',
+    category: 'feature',
+    content: 'A huge content drop adding over 120 new items across both DotSlayer and Dot Clicker, including new enemy tiers, bosses, weapons, skills, and power-ups.',
+    highlights: [
+      'Mechanical enemy tier (floors 100+): Drones, Siege Bots, Tesla Coils, Mech Titans',
+      'Void enemy tier (floors 120+): Void Walkers, Entropy, Nullifiers, Abyssal',
+      '5 new legendary bosses: Void Lord, Mecha Overlord, Time Weaver, Plague Mother, The Architect',
+      '3 new weapons: Flamethrower, Rail Gun, Grenade Launcher',
+      'Ultra-legendary power-ups: Gravity Well, Quantum Split, Temporal Loop',
+      'Campaign extended to 150 floors',
+      'Clicker: New high-tier buildings and prestige upgrades',
+    ],
+  },
+  {
     id: 'feb-2026-update',
     date: '2026-02-10',
     title: 'Major Update: Weekly Challenges, Events & More!',

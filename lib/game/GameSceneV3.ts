@@ -25,6 +25,12 @@ import { Minimap } from './Minimap'
 import { EnemyAIController, AI_PRESETS, AIBehavior } from './EnemyAI'
 import { StatusEffectManager, StatusType, STATUS_CONFIGS } from './StatusEffects'
 import { crossGameSynergy } from './CrossGameSynergy'
+// INFINITE HORIZONS UPDATE
+import { getFloorModifiers, combineModifierEffects, FloorModifier } from './FloorModifiers'
+import { weaponMastery } from './WeaponMastery'
+import { getCombinedSetEffects, getActiveSetBonuses } from './ItemSets'
+import { endlessMode, EndlessModeManager } from './EndlessMode'
+import { challengeModes, ChallengeMode, ChallengeModeConfig, CHALLENGE_MODES } from './ChallengeModes'
 
 export default class GameSceneV3 extends Phaser.Scene {
   private player!: Player
@@ -52,6 +58,16 @@ export default class GameSceneV3 extends Phaser.Scene {
   private visualEffects!: VisualEffects
   private floorThemeRenderer!: FloorThemeRenderer
   private minimap: Minimap | null = null  // Disabled - conflicts with React HUD
+
+  // INFINITE HORIZONS SYSTEMS
+  private activeFloorModifiers: FloorModifier[] = []
+  private activeModifierEffects: ReturnType<typeof combineModifierEffects> = {}
+  private collectedItemIds: string[] = []
+  private explosionTimer: Phaser.Time.TimerEvent | null = null
+  private isEndlessMode = false
+  private activeChallengeMode: ChallengeModeConfig | null = null
+  private challengeTimeDisplay: Phaser.GameObjects.Text | null = null
+  private modifierBanner: Phaser.GameObjects.Container | null = null
 
   private currentUserId: string | null = null
   private currentPlayerName: string = 'Player'
@@ -200,6 +216,28 @@ export default class GameSceneV3 extends Phaser.Scene {
     if (selectedClass) {
       this.applyClassBonuses(selectedClass)
       this.registry.remove('selectedClass')
+    }
+
+    // INFINITE HORIZONS: Check for game mode selection
+    const gameMode = this.registry.get('gameMode') as string | undefined
+    if (gameMode === 'endless') {
+      this.isEndlessMode = true
+      endlessMode.startRun()
+      this.registry.remove('gameMode')
+      this.addKillFeedMessage('🌌 ENDLESS MODE — How far can you go?', '#ff0266', 5000)
+    } else if (gameMode && gameMode.startsWith('challenge_')) {
+      const modeId = gameMode.replace('challenge_', '') as ChallengeMode
+      const config = challengeModes.startChallenge(modeId)
+      if (config) {
+        this.activeChallengeMode = config
+        this.addKillFeedMessage(`${config.icon} ${config.name} — ${config.description}`, `#${config.color.toString(16).padStart(6, '0')}`, 6000)
+        // Apply challenge mode settings
+        if (config.settings.playerHP === 1) {
+          this.player.maxHealth = 1
+          this.player.health = 1
+        }
+      }
+      this.registry.remove('gameMode')
     }
 
     // Load cross-game synergy from Dot Clicker
@@ -1371,9 +1409,41 @@ export default class GameSceneV3 extends Phaser.Scene {
 
     // Reset counters
     this.enemiesKilled = 0
-    this.totalEnemies = floor.enemyCount
     this.bossSpawned = false
     this.stageCompleted = false
+
+    // INFINITE HORIZONS: Apply floor modifiers
+    if (this.isEndlessMode) {
+      this.activeFloorModifiers = endlessMode.getFloorModifiers()
+    } else {
+      this.activeFloorModifiers = getFloorModifiers(floorNum)
+    }
+    this.activeModifierEffects = combineModifierEffects(this.activeFloorModifiers)
+
+    // Apply enemy count modifier
+    const enemyCountMult = this.activeModifierEffects.enemyCountMult || 1
+    this.totalEnemies = Math.floor(floor.enemyCount * enemyCountMult)
+
+    // Show modifier banner if any active
+    if (this.activeFloorModifiers.length > 0) {
+      this.showModifierBanner(this.activeFloorModifiers)
+    }
+
+    // Setup explosion timer for explosive floor modifier
+    if (this.explosionTimer) {
+      this.explosionTimer.remove()
+      this.explosionTimer = null
+    }
+    if (this.activeModifierEffects.explosionInterval) {
+      this.explosionTimer = this.time.addEvent({
+        delay: this.activeModifierEffects.explosionInterval,
+        callback: () => this.triggerRandomExplosion(),
+        loop: true
+      })
+    }
+
+    // Reset floor damage tracking
+    this.runStats.damageTakenThisFloor = 0
 
     // Render floor visually
     this.renderFloorLayout(floor)
@@ -2249,14 +2319,28 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.performAutoSave()
 
     // Check if more floors
-    if (this.floorManager.nextFloor()) {
+    if (this.isEndlessMode) {
+      // Endless mode: always advance
+      const newFloor = endlessMode.nextFloor()
+      const milestones = endlessMode.checkMilestones()
+      for (const milestone of milestones) {
+        this.player.addMoney(milestone.goldReward)
+        this.player.addXP(milestone.xpReward)
+        this.addKillFeedMessage(`${milestone.icon} MILESTONE: ${milestone.name}! ${milestone.reward}`, '#ffd700', 6000)
+      }
+      this.time.delayedCall(3000, () => {
+        this.loadFloor()
+        this.showFloorIntro()
+      })
+    } else if (this.floorManager.nextFloor()) {
       // Next floor
       this.time.delayedCall(3000, () => {
         this.loadFloor()
         this.showFloorIntro()
       })
     } else {
-      // GAME WON! Beat all 100 floors!
+      // GAME WON! Beat all 150 floors! Unlock endless mode
+      endlessMode.unlock()
       this.gameWon()
     }
   }
@@ -2287,6 +2371,100 @@ export default class GameSceneV3 extends Phaser.Scene {
   private playBossMusic() {
     // Switch to dramatic boss music
     this.audioManager.playBossMusic()
+  }
+
+  // ═══════════════════════════════════════
+  // INFINITE HORIZONS: Floor Modifier UI
+  // ═══════════════════════════════════════
+  private showModifierBanner(modifiers: FloorModifier[]) {
+    // Remove previous banner
+    if (this.modifierBanner) {
+      this.modifierBanner.destroy()
+      this.modifierBanner = null
+    }
+
+    const cam = this.cameras.main
+    const bannerY = 120
+
+    this.modifierBanner = this.add.container(cam.scrollX + cam.width / 2, cam.scrollY + bannerY)
+      .setDepth(5000).setScrollFactor(0)
+
+    // Background
+    const totalWidth = modifiers.length * 200 + 20
+    const bg = this.add.rectangle(0, 0, totalWidth, 40, 0x000000, 0.7)
+    bg.setStrokeStyle(2, 0x00d9ff, 0.5)
+    this.modifierBanner.add(bg)
+
+    modifiers.forEach((mod, i) => {
+      const xOffset = (i - (modifiers.length - 1) / 2) * 200
+      const text = this.add.text(xOffset, 0, `${mod.icon} ${mod.name}`, {
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: `#${mod.color.toString(16).padStart(6, '0')}`,
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0.5)
+      this.modifierBanner!.add(text)
+    })
+
+    // Fade out after 4 seconds
+    this.tweens.add({
+      targets: this.modifierBanner,
+      alpha: 0,
+      delay: 4000,
+      duration: 1000,
+      onComplete: () => {
+        if (this.modifierBanner) {
+          this.modifierBanner.destroy()
+          this.modifierBanner = null
+        }
+      }
+    })
+  }
+
+  private triggerRandomExplosion() {
+    if (!this.player || !this.player.active) return
+    const damage = this.activeModifierEffects.explosionDamage || 30
+
+    // Random position near player
+    const range = 300
+    const x = this.player.x + Phaser.Math.Between(-range, range)
+    const y = this.player.y + Phaser.Math.Between(-range, range)
+
+    // Warning indicator
+    const warning = this.add.circle(x, y, 40, 0xff0000, 0.3).setDepth(3000)
+    this.tweens.add({
+      targets: warning,
+      scale: 1.5,
+      alpha: 0.6,
+      duration: 800,
+      yoyo: true,
+      onComplete: () => {
+        warning.destroy()
+        // Explosion
+        try {
+          this.visualEffects.createDeathExplosion(x, y, 0xff6600, 2)
+        } catch (e) { /* ignore */ }
+
+        // Damage player if close
+        const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y)
+        if (dist < 80) {
+          this.player.takeDamage(damage)
+          this.runStats.damageTaken += damage
+        }
+
+        // Damage enemies nearby too
+        this.enemies.children.entries.forEach((enemy: any) => {
+          if (enemy.active) {
+            const d = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y)
+            if (d < 80) {
+              enemy.health -= damage
+              if (enemy.health <= 0) this.handleEnemyDeath(enemy)
+            }
+          }
+        })
+      }
+    })
   }
 
   private checkAchievementsProgress() {
@@ -3130,12 +3308,34 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.runStats.totalKills++
     this.runStats.enemiesKilledThisRun++
 
-    // Award money and XP
-    const money = enemy.reward || 50
-    const xp = enemy.xpReward || Math.floor(money / 2)
+    // INFINITE HORIZONS: Track weapon mastery kills
+    try {
+      const weaponName = this.player.getCurrentWeaponName()
+      if (weaponName) weaponMastery.recordKill(weaponName)
+    } catch (e) { /* ignore */ }
+
+    // INFINITE HORIZONS: Track challenge mode kills
+    if (this.activeChallengeMode) {
+      challengeModes.recordKill(false)
+    }
+    if (this.isEndlessMode) {
+      endlessMode.recordKills(1)
+    }
+
+    // Award money and XP (apply modifier multipliers)
+    const goldMult = this.activeModifierEffects.goldMult || 1
+    const xpMult = this.activeModifierEffects.xpMult || 1
+    const money = Math.floor((enemy.reward || 50) * goldMult)
+    const xp = Math.floor((enemy.xpReward || Math.floor((enemy.reward || 50) / 2)) * xpMult)
     this.player.addMoney(money)
     this.player.addXP(xp)
     this.runStats.totalMoney += money
+
+    // INFINITE HORIZONS: Lifesteal from vampiric modifier
+    if (this.activeModifierEffects.playerLifesteal && this.activeModifierEffects.playerLifesteal > 0) {
+      const healAmount = Math.floor(money * this.activeModifierEffects.playerLifesteal)
+      if (healAmount > 0) this.player.heal(healAmount)
+    }
 
     // Visual effects
     try {

@@ -203,7 +203,60 @@ export class CrossGameSynergyService {
       achievements.push('DUAL_MASTER')
     }
 
+    // INFINITE HORIZONS: New synergy achievements
+    const level = this.calculateCrossGameLevel(slayer, clicker)
+    if (level >= 10) achievements.push('SYNERGY_LEVEL_10')
+    if (level >= 25) achievements.push('SYNERGY_LEVEL_25')
+    if (level >= 50) achievements.push('SYNERGY_LEVEL_50')
+    if (slayer.totalKills >= 1000000) achievements.push('MILLION_SLAYER')
+    if (clicker.totalDots >= 1000000000000) achievements.push('TRILLIONAIRE')
+    if (slayer.highestFloor >= 100 && clicker.totalPrestiges >= 20) {
+      achievements.push('DEDICATED_GAMER')
+    }
+    if (slayer.highestFloor >= 150) achievements.push('CAMPAIGN_COMPLETE')
+    if (slayer.bossesKilled >= 15) achievements.push('BOSS_SLAYER')
+    if (clicker.totalPrestiges >= 50 && slayer.totalKills >= 50000) {
+      achievements.push('TRUE_DOT_MASTER')
+    }
+    if (clicker.totalClicks >= 100000 && slayer.totalKills >= 100000) {
+      achievements.push('DOUBLE_100K')
+    }
+
     return achievements
+  }
+
+  // INFINITE HORIZONS: Milestone rewards
+  getMilestoneRewards(): Array<{
+    level: number
+    name: string
+    description: string
+    icon: string
+    unlocked: boolean
+  }> {
+    const level = this.calculateBonuses().crossGameLevel
+    return [
+      {
+        level: 10,
+        name: 'Void Pistol & Synergy Cursor',
+        description: 'Unlock Void Pistol weapon in DotSlayer + Synergy Cursor building in Clicker',
+        icon: '🔫',
+        unlocked: level >= 10
+      },
+      {
+        level: 25,
+        name: 'Synergy Set & +25% Both Games',
+        description: 'Exclusive cross-game item set + permanent +25% to both games',
+        icon: '🔗',
+        unlocked: level >= 25
+      },
+      {
+        level: 50,
+        name: 'Transcendence Mode',
+        description: 'All stats +50%, exclusive cosmetic title',
+        icon: '🌌',
+        unlocked: level >= 50
+      }
+    ]
   }
 
   // Get formatted bonus text for UI display

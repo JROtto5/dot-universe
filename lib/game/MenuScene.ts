@@ -2,6 +2,8 @@ import * as Phaser from 'phaser'
 import { SaveManager } from '../supabase/SaveManager'
 import { LeaderboardService } from '../supabase/LeaderboardService'
 import { SaveData, LeaderboardEntry } from '../supabase/client'
+import { endlessMode } from './EndlessMode'
+import { challengeModes, CHALLENGE_MODES, ChallengeMode } from './ChallengeModes'
 
 // Color palette for sci-fi cyber theme
 const COLORS = {
@@ -149,9 +151,17 @@ export default class MenuScene extends Phaser.Scene {
       this.playerName = currentUser.displayName || 'Player'
     }
 
+    // Check challenge mode unlocks
+    try {
+      const progress = JSON.parse(localStorage.getItem('dotslayer_progress') || '{}')
+      const synergyStats = JSON.parse(localStorage.getItem('dotslayer_synergy_stats') || '{}')
+      challengeModes.checkUnlocks(progress.highestFloor || 0, synergyStats.bossesKilled || 0)
+    } catch (e) { /* ignore */ }
+
     this.createBackground()
     this.createParticles()
     this.createTitle()
+    this.createGameModeButtons()
     this.loadAndDisplayLeaderboard()
     this.loadAndDisplaySaveSlots()
     this.startAutoRefresh()
@@ -227,6 +237,101 @@ export default class MenuScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut'
     })
+  }
+
+  private createGameModeButtons() {
+    const { width, height } = this.scale
+    const centerX = width / 2
+    const isSmallScreen = width < 600
+    const buttonY = height - (isSmallScreen ? 320 : 350)
+
+    // Only show if any modes are unlocked
+    const endlessUnlocked = endlessMode.isUnlocked()
+    const allModes = challengeModes.getAllModes()
+    const unlockedModes = allModes.filter(m => m.unlocked)
+
+    if (!endlessUnlocked && unlockedModes.length === 0) return
+
+    // "GAME MODES" label
+    this.add.text(centerX, buttonY - 30, 'GAME MODES', {
+      fontSize: isSmallScreen ? '16px' : '20px',
+      fontStyle: 'bold',
+      color: `#${COLORS.accent2.toString(16).padStart(6, '0')}`,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5)
+
+    const buttonWidth = isSmallScreen ? 100 : 130
+    const buttonHeight = isSmallScreen ? 45 : 55
+    const spacing = isSmallScreen ? 10 : 15
+
+    // Build list of mode buttons to show
+    const buttons: Array<{ label: string; icon: string; color: number; onClick: () => void }> = []
+
+    if (endlessUnlocked) {
+      buttons.push({
+        label: 'ENDLESS',
+        icon: '🌌',
+        color: 0xff0266,
+        onClick: () => {
+          this.registry.set('gameMode', 'endless')
+          this.showClassSelection()
+        }
+      })
+    }
+
+    for (const mode of unlockedModes) {
+      buttons.push({
+        label: mode.name.split(' ')[0], // First word only for compactness
+        icon: mode.icon,
+        color: mode.color,
+        onClick: () => {
+          this.registry.set('gameMode', `challenge_${mode.id}`)
+          this.showClassSelection()
+        }
+      })
+    }
+
+    // Render buttons horizontally centered
+    const totalWidth = buttons.length * buttonWidth + (buttons.length - 1) * spacing
+    const startX = centerX - totalWidth / 2 + buttonWidth / 2
+
+    buttons.forEach((btn, index) => {
+      const x = startX + index * (buttonWidth + spacing)
+      const y = buttonY + 10
+
+      const bg = this.add.rectangle(x, y, buttonWidth, buttonHeight, COLORS.panel, 0.9)
+      bg.setStrokeStyle(2, btn.color, 0.7)
+      bg.setInteractive({ useHandCursor: true })
+
+      const label = this.add.text(x, y - 6, btn.icon, {
+        fontSize: isSmallScreen ? '16px' : '20px',
+      }).setOrigin(0.5)
+
+      const text = this.add.text(x, y + 14, btn.label, {
+        fontSize: isSmallScreen ? '9px' : '11px',
+        fontStyle: 'bold',
+        color: `#${btn.color.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5)
+
+      bg.on('pointerover', () => {
+        bg.setStrokeStyle(3, COLORS.highlight, 1)
+        this.tweens.add({ targets: [bg, label, text], scale: 1.05, duration: 150 })
+      })
+      bg.on('pointerout', () => {
+        bg.setStrokeStyle(2, btn.color, 0.7)
+        this.tweens.add({ targets: [bg, label, text], scale: 1, duration: 150 })
+      })
+      bg.on('pointerdown', btn.onClick)
+    })
+
+    // Show best endless floor if applicable
+    if (endlessUnlocked && endlessMode.getBestFloor() > 0) {
+      this.add.text(centerX, buttonY + 50, `Best Endless: Floor ${endlessMode.getBestFloor()}`, {
+        fontSize: '12px',
+        color: `#${COLORS.text.toString(16).padStart(6, '0')}`,
+      }).setOrigin(0.5)
+    }
   }
 
   private async loadAndDisplayLeaderboard() {

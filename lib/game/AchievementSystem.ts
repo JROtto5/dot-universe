@@ -592,6 +592,126 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'platinum',
     color: 0xff0266
   },
+
+  // ═══════════════════════════════════════
+  // INFINITE HORIZONS ACHIEVEMENTS
+  // ═══════════════════════════════════════
+
+  // Endless Mode
+  {
+    id: 'endless_10',
+    name: 'Endless Explorer',
+    description: 'Reach Endless Floor 10',
+    icon: '🌌',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_endless_mode') || '{}'); return (d.bestFloor || 0) >= 10 } catch { return false }
+    },
+    tier: 'bronze',
+    color: 0xff0266
+  },
+  {
+    id: 'endless_50',
+    name: 'Endless Champion',
+    description: 'Reach Endless Floor 50',
+    icon: '🏆',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_endless_mode') || '{}'); return (d.bestFloor || 0) >= 50 } catch { return false }
+    },
+    tier: 'gold',
+    color: 0xff0266
+  },
+  {
+    id: 'endless_100',
+    name: 'Endless Legend',
+    description: 'Reach Endless Floor 100',
+    icon: '👑',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_endless_mode') || '{}'); return (d.bestFloor || 0) >= 100 } catch { return false }
+    },
+    tier: 'platinum',
+    color: 0xff0266
+  },
+
+  // Weapon Mastery
+  {
+    id: 'mastery_apprentice',
+    name: 'Apprentice Slayer',
+    description: 'Reach Apprentice rank with any weapon',
+    icon: '🔫',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return Object.values(d.kills || {}).some((k: any) => k >= 100) } catch { return false }
+    },
+    tier: 'bronze',
+    color: 0x2ecc71
+  },
+  {
+    id: 'mastery_expert',
+    name: 'Weapons Expert',
+    description: 'Reach Expert rank with any weapon',
+    icon: '🎯',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return Object.values(d.kills || {}).some((k: any) => k >= 2000) } catch { return false }
+    },
+    tier: 'silver',
+    color: 0x9b59b6
+  },
+  {
+    id: 'mastery_grandmaster',
+    name: 'Grandmaster',
+    description: 'Reach Grandmaster rank with any weapon',
+    icon: '★',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return Object.values(d.kills || {}).some((k: any) => k >= 50000) } catch { return false }
+    },
+    tier: 'platinum',
+    color: 0xff0266
+  },
+
+  // Challenge Modes
+  {
+    id: 'boss_rush_complete',
+    name: 'Boss Slayer',
+    description: 'Complete Boss Rush mode',
+    icon: '👹',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_challenge_modes') || '{}'); return d.records?.boss_rush?.score > 0 } catch { return false }
+    },
+    tier: 'gold',
+    color: 0xe74c3c
+  },
+  {
+    id: 'survival_5min',
+    name: 'Survivor',
+    description: 'Survive 5 minutes in Survival mode',
+    icon: '💀',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_challenge_modes') || '{}'); return (d.records?.survival?.score || 0) >= 300000 } catch { return false }
+    },
+    tier: 'silver',
+    color: 0x9b59b6
+  },
+  {
+    id: 'hardcore_floor_25',
+    name: 'Hardcore Hero',
+    description: 'Reach Floor 25 in Hardcore mode',
+    icon: '☠️',
+    condition: () => {
+      try { const d = JSON.parse(localStorage.getItem('dotslayer_challenge_modes') || '{}'); return (d.records?.hardcore?.score || 0) >= 25 } catch { return false }
+    },
+    tier: 'gold',
+    color: 0x2c3e50
+  },
+
+  // Campaign completion
+  {
+    id: 'campaign_complete',
+    name: 'Campaign Victor',
+    description: 'Complete all 150 campaign floors',
+    icon: '🌟',
+    condition: (stats) => stats.floorsCompleted >= 150,
+    tier: 'platinum',
+    color: 0xffd700
+  },
 ]
 
 export class AchievementManager {

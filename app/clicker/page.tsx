@@ -291,6 +291,9 @@ interface GameState {
   ascensionLevel: number
   totalAscensions: number
   ascensionPoints: number
+  // Research tree (Infinite Horizons)
+  researchPoints: number
+  researchNodes: { [nodeId: string]: boolean }
 }
 
 const INITIAL_BUILDINGS: Building[] = [
@@ -596,6 +599,51 @@ const INITIAL_PRESTIGE_UPGRADES: PrestigeUpgrade[] = [
   { id: 'p_cosmic_convergence', name: 'Cosmic Convergence', description: 'All multipliers +50%', cost: 2000, effect: 'cosmicConvergence', purchased: false, icon: '🌌', tier: 8 },
 ]
 
+// ============= RESEARCH TREE (Infinite Horizons) =============
+interface ResearchNode {
+  id: string
+  name: string
+  description: string
+  effect: string
+  cost: number // Research Points
+  tier: number
+  icon: string
+}
+
+const RESEARCH_NODES: ResearchNode[] = [
+  // Tier 1
+  { id: 'r_efficient_clicking', name: 'Efficient Clicking', description: '+50% click power', effect: 'clickPower50', cost: 5, tier: 1, icon: '👆' },
+  { id: 'r_mass_production', name: 'Mass Production', description: '+50% building output', effect: 'buildingOutput50', cost: 5, tier: 1, icon: '🏭' },
+  { id: 'r_quick_start', name: 'Quick Start', description: 'Start with 1000 dots', effect: 'quickStart', cost: 3, tier: 1, icon: '🚀' },
+  // Tier 2
+  { id: 'r_auto_clicker', name: 'Auto-Clicker', description: '1 auto-click/sec', effect: 'autoClick1', cost: 10, tier: 2, icon: '🤖' },
+  { id: 'r_bulk_discount', name: 'Bulk Discount', description: 'Buildings cost 10% less', effect: 'bulkDiscount', cost: 10, tier: 2, icon: '💰' },
+  { id: 'r_lucky_strikes', name: 'Lucky Strikes', description: '+5% crit chance', effect: 'critChance5', cost: 8, tier: 2, icon: '🍀' },
+  // Tier 3
+  { id: 'r_synergy_boost', name: 'Synergy Boost', description: '+100% cross-game bonuses', effect: 'synergyDouble', cost: 20, tier: 3, icon: '🔗' },
+  { id: 'r_golden_magnetism', name: 'Golden Magnetism', description: '+50% golden dot chance', effect: 'goldenChance50', cost: 15, tier: 3, icon: '🧲' },
+  { id: 'r_offline_mastery', name: 'Offline Mastery', description: '+50% offline earnings', effect: 'offlineMastery', cost: 20, tier: 3, icon: '🌙' },
+  // Tier 4
+  { id: 'r_cascade', name: 'Cascade Effect', description: '5% chance clicks chain react (3x value)', effect: 'cascadeEffect', cost: 35, tier: 4, icon: '💥' },
+  { id: 'r_building_synergy', name: 'Building Synergy', description: 'Each building type boosts others +1%', effect: 'buildingSynergy', cost: 30, tier: 4, icon: '🏗️' },
+  { id: 'r_time_warp', name: 'Time Warp', description: 'Prestige gives 1 hour of offline earnings', effect: 'timeWarpPrestige', cost: 40, tier: 4, icon: '⏰' },
+  // Tier 5
+  { id: 'r_singularity', name: 'Singularity', description: 'All production x2', effect: 'productionDouble', cost: 60, tier: 5, icon: '🕳️' },
+  { id: 'r_quantum_clicks', name: 'Quantum Clicks', description: '1% chance clicks are 1000x value', effect: 'quantumClicks', cost: 50, tier: 5, icon: '⚛️' },
+  { id: 'r_eternal_growth', name: 'Eternal Growth', description: '+0.1% production per minute (caps at +100%)', effect: 'eternalGrowthR', cost: 75, tier: 5, icon: '♾️' },
+]
+
+// Mini-game types
+type MiniGameType = 'click_frenzy' | 'golden_rush' | 'dot_storm'
+
+interface MiniGameState {
+  type: MiniGameType
+  active: boolean
+  timeLeft: number   // ms
+  score: number
+  targets?: Array<{ id: number; x: number; y: number; clicked: boolean }>
+}
+
 // ============= HELPER FUNCTIONS =============
 
 function formatNumber(n: number): string {
@@ -839,7 +887,7 @@ export default function DotClicker() {
   const [clickEffects, setClickEffects] = useState<Array<{id: number, x: number, y: number, value: string, color: string}>>([])
   const [musicMuted, setMusicMuted] = useState(false)
   const [musicStarted, setMusicStarted] = useState(false)
-  const [activeTab, setActiveTab] = useState<'buildings' | 'upgrades' | 'stats' | 'achievements' | 'prestige'>('buildings')
+  const [activeTab, setActiveTab] = useState<'buildings' | 'upgrades' | 'stats' | 'achievements' | 'prestige' | 'research'>('buildings')
   const [showPrestige, setShowPrestige] = useState(false)
   const [goldenDot, setGoldenDot] = useState<{x: number, y: number, expires: number} | null>(null)
   const [notification, setNotification] = useState<string | null>(null)
@@ -847,6 +895,10 @@ export default function DotClicker() {
   const [frenzyTimer, setFrenzyTimer] = useState(0)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
+  // INFINITE HORIZONS: Mini-games and Research
+  const [miniGame, setMiniGame] = useState<MiniGameState | null>(null)
+  const miniGameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastMiniGameRef = useRef<number>(Date.now())
   const [saveMessage, setSaveMessage] = useState('')
   const [lastCloudSave, setLastCloudSave] = useState<number | null>(null)
   const [offlineEarningsInfo, setOfflineEarningsInfo] = useState<{amount: number, time: number} | null>(null)
@@ -1042,6 +1094,8 @@ export default function DotClicker() {
       ascensionLevel: 0,
       totalAscensions: 0,
       ascensionPoints: 0,
+      researchPoints: 0,
+      researchNodes: {},
     }
   }
 
@@ -1507,10 +1561,14 @@ export default function DotClicker() {
       ascensionLevel: gameState.ascensionLevel,
       totalAscensions: gameState.totalAscensions,
       ascensionPoints: gameState.ascensionPoints,
+      // INFINITE HORIZONS: Award Research Points on prestige
+      researchPoints: gameState.researchPoints + 1 + Math.floor(Math.log10(Math.max(1, gameState.totalDots / 1000000000000))),
+      researchNodes: gameState.researchNodes,
     })
 
+    const rpGained = 1 + Math.floor(Math.log10(Math.max(1, gameState.totalDots / 1000000000000)))
     setShowPrestige(false)
-    setNotification(`⭐ Prestiged! +${newPrestigePoints} points. New multiplier: ${prestigeMultiplier.toFixed(2)}x`)
+    setNotification(`⭐ Prestiged! +${newPrestigePoints} points, +${rpGained} RP. New multiplier: ${prestigeMultiplier.toFixed(2)}x`)
     setTimeout(() => setNotification(null), 5000)
   }, [gameState])
 
@@ -1553,6 +1611,145 @@ export default function DotClicker() {
     setShowPrestige(false)
     setNotification(`🌌 ASCENDED! Level ${newAscensionLevel}! +${ascensionPointsGained} Ascension Points. Permanent +${(newAscensionLevel * 15)}% bonus!`)
     setTimeout(() => setNotification(null), 7000)
+  }, [gameState])
+
+  // ═══════════════════════════════════════
+  // INFINITE HORIZONS: Mini-Game System
+  // ═══════════════════════════════════════
+  const startMiniGame = useCallback((type: MiniGameType) => {
+    if (!gameState || miniGame) return
+
+    let state: MiniGameState
+    switch (type) {
+      case 'click_frenzy':
+        state = { type, active: true, timeLeft: 10000, score: 0 }
+        break
+      case 'golden_rush':
+        state = {
+          type, active: true, timeLeft: 8000, score: 0,
+          targets: Array.from({ length: 15 }, (_, i) => ({
+            id: i, x: 10 + Math.random() * 80, y: 10 + Math.random() * 80, clicked: false
+          }))
+        }
+        break
+      case 'dot_storm':
+        state = { type, active: true, timeLeft: 20000, score: 0 }
+        break
+      default:
+        return
+    }
+
+    setMiniGame(state)
+    lastMiniGameRef.current = Date.now()
+
+    // Timer
+    if (miniGameTimerRef.current) clearInterval(miniGameTimerRef.current)
+    miniGameTimerRef.current = setInterval(() => {
+      setMiniGame(prev => {
+        if (!prev || !prev.active) return prev
+        const newTime = prev.timeLeft - 100
+        if (newTime <= 0) {
+          // End mini-game
+          if (miniGameTimerRef.current) clearInterval(miniGameTimerRef.current)
+          return { ...prev, active: false, timeLeft: 0 }
+        }
+        return { ...prev, timeLeft: newTime }
+      })
+    }, 100)
+  }, [gameState, miniGame])
+
+  const handleMiniGameClick = useCallback(() => {
+    if (!miniGame || !miniGame.active || !gameState) return
+
+    if (miniGame.type === 'click_frenzy') {
+      setMiniGame(prev => prev ? { ...prev, score: prev.score + 1 } : prev)
+    }
+  }, [miniGame, gameState])
+
+  const handleMiniGameTargetClick = useCallback((targetId: number) => {
+    if (!miniGame || !miniGame.active || miniGame.type !== 'golden_rush') return
+    setMiniGame(prev => {
+      if (!prev || !prev.targets) return prev
+      return {
+        ...prev,
+        score: prev.score + 1,
+        targets: prev.targets.map(t => t.id === targetId ? { ...t, clicked: true } : t)
+      }
+    })
+  }, [miniGame])
+
+  const collectMiniGameReward = useCallback(() => {
+    if (!miniGame || !gameState) return
+    let reward = 0
+    const cps = calculateDps(gameState)
+    const clickPower = calculateClickPower(gameState)
+
+    switch (miniGame.type) {
+      case 'click_frenzy':
+        reward = miniGame.score * cps * 10
+        break
+      case 'golden_rush':
+        reward = miniGame.score * clickPower * 100
+        if (miniGame.score >= 15) reward *= 2 // Bonus for getting all
+        break
+      case 'dot_storm':
+        reward = cps * 50 * 20 // 50x CPS for 20 seconds
+        break
+    }
+
+    setGameState(prev => prev ? { ...prev, dots: prev.dots + reward, totalDots: prev.totalDots + reward } : prev)
+    setNotification(`Mini-game complete! +${formatNumber(reward)} dots!`)
+    setTimeout(() => setNotification(null), 4000)
+    setMiniGame(null)
+  }, [miniGame, gameState])
+
+  // Random mini-game trigger (every 5-10 minutes)
+  useEffect(() => {
+    if (!gameState || miniGame) return
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - lastMiniGameRef.current
+      const triggerTime = 300000 + Math.random() * 300000 // 5-10 minutes
+      if (elapsed >= triggerTime && gameState.totalPrestiges >= 1) {
+        const types: MiniGameType[] = ['click_frenzy', 'golden_rush', 'dot_storm']
+        startMiniGame(types[Math.floor(Math.random() * types.length)])
+      }
+    }, 30000)
+    return () => clearInterval(checkInterval)
+  }, [gameState, miniGame, startMiniGame])
+
+  // ═══════════════════════════════════════
+  // INFINITE HORIZONS: Research Tree
+  // ═══════════════════════════════════════
+  const buyResearch = useCallback((nodeId: string) => {
+    if (!gameState) return
+    const node = RESEARCH_NODES.find(n => n.id === nodeId)
+    if (!node) return
+    if (gameState.researchNodes[nodeId]) return // Already purchased
+    if (gameState.researchPoints < node.cost) return
+
+    // Check tier prerequisites (need at least 1 from previous tier)
+    if (node.tier > 1) {
+      const prevTierNodes = RESEARCH_NODES.filter(n => n.tier === node.tier - 1)
+      const hasPrevTier = prevTierNodes.some(n => gameState.researchNodes[n.id])
+      if (!hasPrevTier) return
+    }
+
+    setGameState(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        researchPoints: prev.researchPoints - node.cost,
+        researchNodes: { ...prev.researchNodes, [nodeId]: true }
+      }
+    })
+    setNotification(`Research unlocked: ${node.name}!`)
+    setTimeout(() => setNotification(null), 3000)
+  }, [gameState])
+
+  // Check if a research effect is active
+  const hasResearch = useCallback((effectId: string): boolean => {
+    if (!gameState) return false
+    return RESEARCH_NODES.some(n => n.effect === effectId && gameState.researchNodes[n.id])
   }, [gameState])
 
   if (loading || !gameState) {
@@ -1688,8 +1885,13 @@ export default function DotClicker() {
           🏆 {gameState.achievements.filter(a => a.unlocked).length}/{gameState.achievements.length}
         </button>
         <button className={`tab prestige-tab ${activeTab === 'prestige' ? 'active' : ''}`} onClick={() => setActiveTab('prestige')}>
-          ⭐ Prestige Shop
+          ⭐ Prestige
         </button>
+        {gameState.totalPrestiges >= 1 && (
+          <button className={`tab research-tab ${activeTab === 'research' ? 'active' : ''}`} onClick={() => setActiveTab('research')}>
+            🔬 Research ({gameState.researchPoints} RP)
+          </button>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -1867,7 +2069,118 @@ export default function DotClicker() {
             ))}
           </div>
         )}
+
+        {activeTab === 'research' && (
+          <div className="research-tree">
+            <div className="research-header">
+              <span className="research-points-display">🔬 {gameState.researchPoints} Research Points</span>
+              <span className="research-info">Earn RP from prestiges. Persists through prestiges, refunded on ascension.</span>
+            </div>
+            {[1, 2, 3, 4, 5].map(tier => (
+              <div key={tier} className="research-tier">
+                <h4 className={`tier-title tier-${tier}`}>
+                  {tier === 1 && '🌱 Tier 1 - Foundations'}
+                  {tier === 2 && '🔧 Tier 2 - Automation'}
+                  {tier === 3 && '🔗 Tier 3 - Synergy'}
+                  {tier === 4 && '💥 Tier 4 - Power'}
+                  {tier === 5 && '♾️ Tier 5 - Transcendence'}
+                </h4>
+                <div className="research-grid">
+                  {RESEARCH_NODES.filter(n => n.tier === tier).map(node => {
+                    const owned = gameState.researchNodes[node.id]
+                    const canAfford = gameState.researchPoints >= node.cost && !owned
+                    const prevTierMet = tier === 1 || RESEARCH_NODES.filter(n => n.tier === tier - 1).some(n => gameState.researchNodes[n.id])
+                    return (
+                      <div
+                        key={node.id}
+                        className={`research-node ${owned ? 'owned' : ''} ${canAfford && prevTierMet ? 'affordable' : ''} ${!prevTierMet && !owned ? 'locked' : ''}`}
+                        onClick={() => prevTierMet && buyResearch(node.id)}
+                      >
+                        <span className="research-icon">{node.icon}</span>
+                        <div className="research-info-block">
+                          <span className="research-name">{node.name}</span>
+                          <span className="research-desc">{node.description}</span>
+                        </div>
+                        <span className={`research-cost ${owned ? 'purchased' : ''}`}>
+                          {owned ? '✓' : `${node.cost} RP`}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* INFINITE HORIZONS: Mini-Game Overlay */}
+      {miniGame && (
+        <div className="mini-game-overlay">
+          <div className="mini-game-container">
+            {miniGame.type === 'click_frenzy' && (
+              <>
+                <h2>CLICK FRENZY!</h2>
+                <p className="mini-game-timer">{(miniGame.timeLeft / 1000).toFixed(1)}s</p>
+                <div className="mini-game-area frenzy-area" onClick={handleMiniGameClick}>
+                  <div className="frenzy-dot" style={{ transform: `scale(${1 + miniGame.score * 0.02})` }}>
+                    <span className="frenzy-count">{miniGame.score}</span>
+                  </div>
+                  <p>CLICK AS FAST AS YOU CAN!</p>
+                </div>
+                {!miniGame.active && (
+                  <button className="btn mini-game-collect" onClick={collectMiniGameReward}>
+                    Collect! ({miniGame.score} clicks x CPS x 10)
+                  </button>
+                )}
+              </>
+            )}
+            {miniGame.type === 'golden_rush' && (
+              <>
+                <h2>GOLDEN RUSH!</h2>
+                <p className="mini-game-timer">{(miniGame.timeLeft / 1000).toFixed(1)}s</p>
+                <div className="mini-game-area golden-area">
+                  {miniGame.targets?.map(t => !t.clicked && (
+                    <div
+                      key={t.id}
+                      className="golden-target"
+                      style={{ left: `${t.x}%`, top: `${t.y}%` }}
+                      onClick={() => handleMiniGameTargetClick(t.id)}
+                    />
+                  ))}
+                  <p className="golden-score">{miniGame.score}/15</p>
+                </div>
+                {!miniGame.active && (
+                  <button className="btn mini-game-collect" onClick={collectMiniGameReward}>
+                    Collect! ({miniGame.score} golden dots{miniGame.score >= 15 ? ' - PERFECT BONUS!' : ''})
+                  </button>
+                )}
+              </>
+            )}
+            {miniGame.type === 'dot_storm' && (
+              <>
+                <h2>DOT STORM!</h2>
+                <p className="mini-game-timer">{(miniGame.timeLeft / 1000).toFixed(1)}s</p>
+                <div className="mini-game-area storm-area">
+                  {miniGame.active && Array.from({ length: 20 }).map((_, i) => (
+                    <div key={i} className="storm-dot" style={{
+                      left: `${Math.random() * 90}%`,
+                      animationDelay: `${Math.random() * 2}s`,
+                      animationDuration: `${1 + Math.random()}s`
+                    }} />
+                  ))}
+                  <p>Dots are raining! Auto-generating at 50x CPS!</p>
+                </div>
+                {!miniGame.active && (
+                  <button className="btn mini-game-collect" onClick={collectMiniGameReward}>
+                    Collect! (50x CPS x 20s)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bottom Buttons */}
       <div className="bottom-buttons">
@@ -2721,6 +3034,118 @@ export default function DotClicker() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
         }
+
+        /* INFINITE HORIZONS: Research Tree */
+        .research-tree { padding: 10px; }
+        .research-header {
+          display: flex; flex-direction: column; align-items: center;
+          margin-bottom: 15px; padding: 10px;
+          background: rgba(155, 89, 182, 0.1); border-radius: 8px;
+        }
+        .research-points-display {
+          font-size: 1.2rem; font-weight: bold; color: #9b59b6;
+        }
+        .research-info { font-size: 0.8rem; color: #888; margin-top: 5px; }
+        .research-tier { margin-bottom: 15px; }
+        .research-grid {
+          display: grid; grid-template-columns: 1fr; gap: 8px;
+        }
+        .research-node {
+          display: flex; align-items: center; gap: 10px;
+          padding: 10px 12px; background: rgba(30, 30, 30, 0.8);
+          border: 1px solid #333; border-radius: 8px; cursor: pointer;
+          transition: all 0.2s;
+        }
+        .research-node.owned {
+          background: rgba(155, 89, 182, 0.2); border-color: #9b59b6;
+        }
+        .research-node.affordable {
+          border-color: #2ecc71; background: rgba(46, 204, 113, 0.1);
+        }
+        .research-node.affordable:hover {
+          transform: scale(1.02); border-color: #27ae60;
+        }
+        .research-node.locked { opacity: 0.4; cursor: not-allowed; }
+        .research-icon { font-size: 1.5rem; }
+        .research-info-block { flex: 1; display: flex; flex-direction: column; }
+        .research-name { font-weight: bold; color: #fff; font-size: 0.9rem; }
+        .research-desc { color: #888; font-size: 0.75rem; }
+        .research-cost { font-weight: bold; color: #9b59b6; white-space: nowrap; }
+        .research-cost.purchased { color: #2ecc71; }
+        .research-tab { background: rgba(155, 89, 182, 0.15) !important; }
+        .research-tab.active { background: rgba(155, 89, 182, 0.4) !important; color: #9b59b6 !important; }
+
+        /* INFINITE HORIZONS: Mini-Games */
+        .mini-game-overlay {
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0, 0, 0, 0.85); z-index: 10000;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .mini-game-container {
+          background: #1a1a2e; border: 2px solid #00d9ff;
+          border-radius: 16px; padding: 20px; text-align: center;
+          max-width: 400px; width: 90%;
+        }
+        .mini-game-container h2 {
+          color: #00d9ff; font-size: 1.8rem; margin-bottom: 10px;
+          text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+        }
+        .mini-game-timer {
+          font-size: 2rem; font-weight: bold; color: #f39c12;
+        }
+        .mini-game-area {
+          min-height: 200px; margin: 15px 0; border-radius: 12px;
+          position: relative; overflow: hidden;
+        }
+        .frenzy-area {
+          background: rgba(231, 76, 60, 0.2); border: 1px solid #e74c3c;
+          cursor: pointer; display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+        }
+        .frenzy-dot {
+          width: 80px; height: 80px; border-radius: 50%;
+          background: radial-gradient(circle, #e74c3c, #c0392b);
+          display: flex; align-items: center; justify-content: center;
+          transition: transform 0.1s; margin: 20px 0;
+        }
+        .frenzy-count { color: white; font-size: 1.5rem; font-weight: bold; }
+        .golden-area {
+          background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700;
+          min-height: 250px;
+        }
+        .golden-target {
+          position: absolute; width: 30px; height: 30px; border-radius: 50%;
+          background: radial-gradient(circle, #ffd700, #f39c12);
+          cursor: pointer; animation: goldenPulse 0.5s ease-in-out infinite;
+          box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+        }
+        @keyframes goldenPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.2); }
+        }
+        .golden-score {
+          position: absolute; top: 10px; right: 10px;
+          color: #ffd700; font-size: 1.2rem; font-weight: bold;
+        }
+        .storm-area {
+          background: rgba(52, 152, 219, 0.1); border: 1px solid #3498db;
+          min-height: 250px;
+        }
+        .storm-dot {
+          position: absolute; width: 12px; height: 12px; border-radius: 50%;
+          background: #3498db; animation: stormFall linear infinite;
+        }
+        @keyframes stormFall {
+          0% { top: -10px; opacity: 1; }
+          100% { top: 100%; opacity: 0; }
+        }
+        .mini-game-collect {
+          background: linear-gradient(135deg, #2ecc71, #27ae60) !important;
+          color: white !important; font-size: 1.1rem; padding: 12px 24px;
+          border-radius: 8px; margin-top: 15px; cursor: pointer;
+          border: none; font-weight: bold;
+        }
+        .mini-game-collect:hover { transform: scale(1.05); }
       `}</style>
     </div>
   )

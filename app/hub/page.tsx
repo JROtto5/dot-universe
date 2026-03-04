@@ -624,6 +624,47 @@ export default function GameHub() {
         </div>
       </section>
 
+      {/* INFINITE HORIZONS: Game Modes Section */}
+      <section style={{ maxWidth: '700px', margin: '30px auto', padding: '0 20px', position: 'relative', zIndex: 10 }}>
+        <div style={{
+          background: 'linear-gradient(145deg, rgba(20, 25, 40, 0.8), rgba(15, 20, 35, 0.9))',
+          borderRadius: '16px', padding: '25px',
+          border: '1px solid rgba(0, 217, 255, 0.1)',
+        }}>
+          <h3 style={{
+            fontSize: '1.3rem', fontWeight: 700, letterSpacing: '3px', textAlign: 'center', marginBottom: '20px',
+            background: 'linear-gradient(90deg, #00d9ff, #ff0266)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          }}>GAME MODES</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            {[
+              { name: 'Campaign', desc: '150 floors of increasing danger', icon: '⚔️', color: '#ff6b00', href: '/slayer' },
+              { name: 'Endless', desc: 'Infinite scaling after campaign', icon: '🌌', color: '#ff0266', href: '/slayer' },
+              { name: 'Boss Rush', desc: 'Fight all 15 bosses back-to-back', icon: '👹', color: '#e74c3c', href: '/slayer' },
+              { name: 'Survival', desc: 'How long can you survive?', icon: '💀', color: '#9b59b6', href: '/slayer' },
+              { name: 'Speed Run', desc: '50 floors in 30 minutes', icon: '⏱️', color: '#f39c12', href: '/slayer' },
+              { name: 'Hardcore', desc: '1 HP. 10x rewards.', icon: '☠️', color: '#2c3e50', href: '/slayer' },
+            ].map(mode => (
+              <div key={mode.name} onClick={() => router.push(mode.href)} style={{
+                padding: '12px 15px', borderRadius: '10px', cursor: 'pointer',
+                background: `linear-gradient(135deg, ${mode.color}15, ${mode.color}08)`,
+                border: `1px solid ${mode.color}30`, transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', gap: '10px',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${mode.color}60`; (e.currentTarget as HTMLElement).style.transform = 'scale(1.02)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = `${mode.color}30`; (e.currentTarget as HTMLElement).style.transform = 'scale(1)' }}
+              >
+                <span style={{ fontSize: '1.5rem' }}>{mode.icon}</span>
+                <div>
+                  <span style={{ display: 'block', color: mode.color, fontWeight: 700, fontSize: '0.9rem' }}>{mode.name}</span>
+                  <span style={{ display: 'block', color: '#667', fontSize: '0.75rem' }}>{mode.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Leaderboards */}
       <section style={{ maxWidth: '700px', margin: '30px auto 40px', padding: '0 20px', position: 'relative', zIndex: 10 }}>
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>

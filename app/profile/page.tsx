@@ -637,7 +637,7 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState('')
   const [stats, setStats] = useState<PlayerStats | null>(null)
   const [achievements, setAchievements] = useState<Achievement[]>([])
-  const [activeTab, setActiveTab] = useState<'stats' | 'achievements' | 'milestones'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'achievements' | 'milestones' | 'mastery' | 'challenges' | 'collection'>('stats')
   const [showShare, setShowShare] = useState(false)
   const [recentRuns, setRecentRuns] = useState<any[]>([])
   const [hoveredBackBtn, setHoveredBackBtn] = useState(false)
@@ -854,6 +854,24 @@ export default function ProfilePage() {
           onClick={() => setActiveTab('milestones')}
         >
           🎯 Milestones
+        </button>
+        <button
+          style={activeTab === 'mastery' ? styles.tabActive : styles.tab}
+          onClick={() => setActiveTab('mastery')}
+        >
+          🔫 Mastery
+        </button>
+        <button
+          style={activeTab === 'challenges' ? styles.tabActive : styles.tab}
+          onClick={() => setActiveTab('challenges')}
+        >
+          🏅 Challenges
+        </button>
+        <button
+          style={activeTab === 'collection' ? styles.tabActive : styles.tab}
+          onClick={() => setActiveTab('collection')}
+        >
+          📦 Collection
         </button>
       </div>
 
@@ -1077,6 +1095,143 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* INFINITE HORIZONS: Weapon Mastery Tab */}
+        {activeTab === 'mastery' && (
+          <div style={{ padding: '20px 0' }}>
+            <h2 style={{ textAlign: 'center', color: '#f39c12', marginBottom: '20px', fontSize: '1.3rem' }}>🔫 Weapon Mastery</h2>
+            <p style={{ textAlign: 'center', color: '#888', marginBottom: '20px', fontSize: '0.85rem' }}>
+              Kill enemies with each weapon to earn permanent damage bonuses that persist across runs!
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+              {['Pistol', 'Shotgun', 'SMG', 'Rifle', 'Sniper', 'Minigun', 'Rocket Launcher', 'Laser Rifle', 'Flamethrower', 'Rail Gun', 'Grenade Launcher'].map(weapon => {
+                const kills = (() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_weapon_mastery') || '{}'); return d.kills?.[weapon] || 0 } catch { return 0 } })()
+                const ranks = [
+                  { name: 'Novice', req: 0, color: '#95a5a6' },
+                  { name: 'Apprentice', req: 100, color: '#2ecc71' },
+                  { name: 'Journeyman', req: 500, color: '#3498db' },
+                  { name: 'Expert', req: 2000, color: '#9b59b6' },
+                  { name: 'Master', req: 10000, color: '#f39c12' },
+                  { name: 'Grandmaster', req: 50000, color: '#ff0266' },
+                ]
+                let rank = ranks[0]
+                let nextRank = ranks[1]
+                for (let i = ranks.length - 1; i >= 0; i--) {
+                  if (kills >= ranks[i].req) { rank = ranks[i]; nextRank = ranks[i + 1] || null; break }
+                }
+                const progress = nextRank ? Math.min(100, ((kills - rank.req) / (nextRank.req - rank.req)) * 100) : 100
+
+                return (
+                  <div key={weapon} style={{
+                    background: 'rgba(20, 25, 40, 0.8)', borderRadius: '10px', padding: '12px 15px',
+                    border: `1px solid ${rank.color}40`,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>{weapon}</span>
+                      <span style={{ color: rank.color, fontWeight: 700, fontSize: '0.8rem' }}>{rank.name}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ color: '#888', fontSize: '0.75rem' }}>{kills.toLocaleString()} kills</span>
+                      {nextRank && <span style={{ color: '#666', fontSize: '0.7rem' }}>Next: {nextRank.req.toLocaleString()}</span>}
+                    </div>
+                    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${progress}%`, background: rank.color, borderRadius: '2px', transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* INFINITE HORIZONS: Challenge Records Tab */}
+        {activeTab === 'challenges' && (
+          <div style={{ padding: '20px 0' }}>
+            <h2 style={{ textAlign: 'center', color: '#00d9ff', marginBottom: '20px', fontSize: '1.3rem' }}>🏅 Challenge Records</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
+              {[
+                { id: 'boss_rush', name: 'Boss Rush', icon: '👹', color: '#e74c3c', desc: 'Fight all 15 bosses' },
+                { id: 'survival', name: 'Survival', icon: '💀', color: '#9b59b6', desc: 'Survive as long as possible' },
+                { id: 'speed_run', name: 'Speed Run', icon: '⏱️', color: '#f39c12', desc: '50 floors in 30 minutes' },
+                { id: 'hardcore', name: 'Hardcore', icon: '☠️', color: '#2c3e50', desc: '1 HP, 10x rewards' },
+              ].map(mode => {
+                const record = (() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_challenge_modes') || '{}'); return d.records?.[mode.id] } catch { return null } })()
+                return (
+                  <div key={mode.id} style={{
+                    background: `linear-gradient(135deg, ${mode.color}15, ${mode.color}08)`,
+                    border: `1px solid ${mode.color}40`, borderRadius: '12px', padding: '15px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '1.5rem' }}>{mode.icon}</span>
+                      <div>
+                        <span style={{ display: 'block', color: mode.color, fontWeight: 700 }}>{mode.name}</span>
+                        <span style={{ display: 'block', color: '#888', fontSize: '0.75rem' }}>{mode.desc}</span>
+                      </div>
+                    </div>
+                    {record ? (
+                      <div style={{ color: '#ccc', fontSize: '0.85rem' }}>
+                        <div>Best: <span style={{ color: mode.color, fontWeight: 600 }}>{record.details}</span></div>
+                      </div>
+                    ) : (
+                      <div style={{ color: '#555', fontSize: '0.8rem', fontStyle: 'italic' }}>No attempts yet</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Endless Mode Record */}
+            <div style={{
+              marginTop: '20px', background: 'linear-gradient(135deg, #ff026615, #ff026608)',
+              border: '1px solid #ff026640', borderRadius: '12px', padding: '15px', textAlign: 'center'
+            }}>
+              <span style={{ fontSize: '1.5rem' }}>🌌</span>
+              <h3 style={{ color: '#ff0266', fontWeight: 700, marginTop: '5px' }}>Endless Mode</h3>
+              <p style={{ color: '#888', fontSize: '0.8rem' }}>Best Floor: {(() => { try { const d = JSON.parse(localStorage.getItem('dotslayer_endless_mode') || '{}'); return d.bestFloor || 0 } catch { return 0 } })()}</p>
+            </div>
+          </div>
+        )}
+
+        {/* INFINITE HORIZONS: Item Collection Tab */}
+        {activeTab === 'collection' && (
+          <div style={{ padding: '20px 0' }}>
+            <h2 style={{ textAlign: 'center', color: '#1abc9c', marginBottom: '20px', fontSize: '1.3rem' }}>📦 Item Sets</h2>
+            <p style={{ textAlign: 'center', color: '#888', marginBottom: '20px', fontSize: '0.85rem' }}>
+              Collect items from the same set to unlock powerful bonuses!
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
+              {[
+                { name: 'Void Set', icon: '🌀', color: '#2d0050', items: ['Void Shard', 'Shadow Cloak', 'Quantum Core'], bonus2: '+20% Void Damage', bonus3: 'Void enemies drop 2x loot' },
+                { name: 'Berserker Set', icon: '🔥', color: '#e74c3c', items: ["Berserker's Rage", 'Amplifier', 'Critical Matrix'], bonus2: '+15% Damage', bonus3: '+1% damage per missing HP%' },
+                { name: 'Guardian Set', icon: '🛡️', color: '#27ae60', items: ['Bio Enhancement', 'Phoenix Feather', 'Healing Totem'], bonus2: '+25% Max HP', bonus3: 'Auto-revive with 30% HP' },
+                { name: 'Fortune Set', icon: '💰', color: '#ffd700', items: ['Gold Magnet', 'XP Catalyst', 'Med Kit'], bonus2: '+30% Gold Drops', bonus3: 'Rare items drop 2x' },
+                { name: 'Elemental Set', icon: '⚡', color: '#00ccff', items: ['Plasma Battery', 'Time Crystal', 'Rapid Fire Core'], bonus2: '+20% Status Duration', bonus3: 'Random status on hit' },
+                { name: 'Mechanical Set', icon: '⚙️', color: '#44aaff', items: ['Mechanical Core', 'Overclocked Barrel', 'Expanded Magazine'], bonus2: '+25% Fire Rate', bonus3: 'Auto-turret companion' },
+              ].map(set => (
+                <div key={set.name} style={{
+                  background: `linear-gradient(135deg, ${set.color}15, ${set.color}08)`,
+                  border: `1px solid ${set.color}40`, borderRadius: '12px', padding: '15px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '1.3rem' }}>{set.icon}</span>
+                    <span style={{ color: set.color, fontWeight: 700, fontSize: '1rem' }}>{set.name}</span>
+                  </div>
+                  <div style={{ marginBottom: '8px' }}>
+                    {set.items.map(item => (
+                      <span key={item} style={{ display: 'block', color: '#999', fontSize: '0.8rem', padding: '2px 0' }}>
+                        ○ {item}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ borderTop: `1px solid ${set.color}20`, paddingTop: '8px', fontSize: '0.8rem' }}>
+                    <div style={{ color: '#aaa' }}>2pc: <span style={{ color: set.color }}>{set.bonus2}</span></div>
+                    <div style={{ color: '#aaa' }}>3pc: <span style={{ color: set.color, fontWeight: 600 }}>{set.bonus3}</span></div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

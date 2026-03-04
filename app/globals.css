@@ -321,3 +321,38 @@ canvas {
   50% { width: 100%; }
   100% { width: 0%; }
 }
+
+/* ═══════════════════════════════════════
+   INFINITE HORIZONS - Game Mode Badges
+   ═══════════════════════════════════════ */
+.game-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.game-mode-badge.endless {
+  background: linear-gradient(135deg, rgba(255, 2, 102, 0.2), rgba(255, 2, 102, 0.1));
+  border: 1px solid rgba(255, 2, 102, 0.3);
+  color: #ff0266;
+}
+
+.game-mode-badge.challenge {
+  background: linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(243, 156, 18, 0.1));
+  border: 1px solid rgba(243, 156, 18, 0.3);
+  color: #f39c12;
+}
+
+/* Mastery rank colors */
+.mastery-novice { color: #95a5a6; }
+.mastery-apprentice { color: #2ecc71; }
+.mastery-journeyman { color: #3498db; }
+.mastery-expert { color: #9b59b6; }
+.mastery-master { color: #f39c12; }
+.mastery-grandmaster { color: #ff0266; text-shadow: 0 0 10px rgba(255, 2, 102, 0.5); }
