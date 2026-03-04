@@ -53,9 +53,9 @@ export const CHALLENGE_MODES: ChallengeModeConfig[] = [
     description: 'Fight all 15 bosses back-to-back! Brief rest between bosses. 25% heal between fights.',
     icon: '👹',
     color: 0xe74c3c,
-    unlockCondition: 'Defeat any 5 bosses',
-    unlockFloor: 0,
-    unlockBosses: 5,
+    unlockCondition: 'Reach Floor 10',
+    unlockFloor: 10,
+    unlockBosses: 1,
     settings: {
       hasFloors: false,
       healingAllowed: true,
@@ -71,8 +71,8 @@ export const CHALLENGE_MODES: ChallengeModeConfig[] = [
     description: 'Infinite waves of enemies with increasing density. How long can you last?',
     icon: '💀',
     color: 0x9b59b6,
-    unlockCondition: 'Reach Floor 50',
-    unlockFloor: 50,
+    unlockCondition: 'Reach Floor 20',
+    unlockFloor: 20,
     settings: {
       hasFloors: false,
       healingAllowed: true,
@@ -87,8 +87,8 @@ export const CHALLENGE_MODES: ChallengeModeConfig[] = [
     description: 'Race through 50 floors against a 30-minute timer! Bonus rewards for time remaining.',
     icon: '⏱️',
     color: 0xf39c12,
-    unlockCondition: 'Complete Floor 50',
-    unlockFloor: 50,
+    unlockCondition: 'Reach Floor 20',
+    unlockFloor: 20,
     settings: {
       hasFloors: true,
       floorCount: 50,
@@ -104,8 +104,8 @@ export const CHALLENGE_MODES: ChallengeModeConfig[] = [
     description: '1 HP. One hit, you\'re dead. 10x gold and XP! Only the bravest survive.',
     icon: '☠️',
     color: 0x2c3e50,
-    unlockCondition: 'Reach Floor 75',
-    unlockFloor: 75,
+    unlockCondition: 'Reach Floor 30',
+    unlockFloor: 30,
     settings: {
       hasFloors: true,
       playerHP: 1,
@@ -166,7 +166,8 @@ export class ChallengeModeManager {
 
       let unlocked = false
       if (mode.id === 'boss_rush') {
-        unlocked = bossesKilled >= (mode.unlockBosses || 5)
+        // Unlock if reached floor threshold OR killed enough bosses
+        unlocked = highestFloor >= mode.unlockFloor || bossesKilled >= (mode.unlockBosses || 1)
       } else {
         unlocked = highestFloor >= mode.unlockFloor
       }
@@ -200,7 +201,11 @@ export class ChallengeModeManager {
    * Start a challenge mode run
    */
   startChallenge(mode: ChallengeMode): ChallengeModeConfig | null {
-    if (!this.data.unlocked.includes(mode)) return null
+    // Auto-unlock if not already (menu already gates visibility)
+    if (!this.data.unlocked.includes(mode)) {
+      this.data.unlocked.push(mode)
+      this.save()
+    }
 
     this.activeMode = mode
     this.modeStartTime = Date.now()

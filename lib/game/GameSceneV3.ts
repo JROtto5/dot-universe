@@ -28,7 +28,7 @@ import { crossGameSynergy } from './CrossGameSynergy'
 // INFINITE HORIZONS UPDATE
 import { getFloorModifiers, combineModifierEffects, FloorModifier } from './FloorModifiers'
 import { weaponMastery } from './WeaponMastery'
-import { getCombinedSetEffects, getActiveSetBonuses } from './ItemSets'
+import { getCombinedSetEffects, getActiveSetBonuses, getSetProgress, ITEM_SETS } from './ItemSets'
 import { endlessMode, EndlessModeManager } from './EndlessMode'
 import { challengeModes, ChallengeMode, ChallengeModeConfig, CHALLENGE_MODES } from './ChallengeModes'
 
@@ -108,6 +108,7 @@ export default class GameSceneV3 extends Phaser.Scene {
 
   private casinoZones: any[] = []
   private skillTreeUI: any = null
+  private inventoryUI: any = null
   private pauseMenuUI: any[] = []
   private isPaused = false
   private isGameOver = false
@@ -1158,6 +1159,9 @@ export default class GameSceneV3 extends Phaser.Scene {
     // Shop (B key)
     this.input.keyboard!.on('keydown-B', () => this.shopUI.toggle())
 
+    // Inventory (I key)
+    this.input.keyboard!.on('keydown-I', () => this.toggleInventory())
+
     // U key: UI Settings menu
     this.input.keyboard!.on('keydown-U', () => {
       if (!this.skillTreeUI && !this.shopUI.isShopOpen() && !this.casinoUI.isOpen && !this.isPaused) {
@@ -1169,6 +1173,8 @@ export default class GameSceneV3 extends Phaser.Scene {
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.isUISettingsOpen) {
         this.closeUISettingsMenu()
+      } else if (this.inventoryUI) {
+        this.closeInventory()
       } else if (this.skillTreeUI) {
         this.closeSkillTree()
       } else if (this.shopUI.isShopOpen()) {
@@ -2242,6 +2248,16 @@ export default class GameSceneV3 extends Phaser.Scene {
       this.runStats.totalKills++
       this.runStats.enemiesKilledThisRun++
 
+      // INFINITE HORIZONS: Track weapon mastery kills
+      try {
+        const wpnName = this.player.getCurrentWeaponName()
+        if (wpnName) weaponMastery.recordKill(wpnName)
+      } catch (e) { /* ignore */ }
+
+      // INFINITE HORIZONS: Track challenge mode kills
+      if (this.activeChallengeMode) challengeModes.recordKill(false)
+      if (this.isEndlessMode) endlessMode.recordKills(1)
+
       // Update daily challenge progress for kills
       const dailyChallengeManager = getDailyChallengeManager()
       dailyChallengeManager.updateProgress('kills', 1)
@@ -2423,6 +2439,16 @@ export default class GameSceneV3 extends Phaser.Scene {
       // ROGUELIKE: Track boss kills
       this.runStats.totalKills++
       this.runStats.bossesKilled++
+
+      // INFINITE HORIZONS: Track weapon mastery kills (boss counts!)
+      try {
+        const wpnName = this.player.getCurrentWeaponName()
+        if (wpnName) weaponMastery.recordKill(wpnName)
+      } catch (e) { /* ignore */ }
+
+      // INFINITE HORIZONS: Track challenge mode kills
+      if (this.activeChallengeMode) challengeModes.recordKill(true)
+      if (this.isEndlessMode) endlessMode.recordKills(1)
 
       // Update daily challenge progress for kills and bosses
       const dailyChallengeManager = getDailyChallengeManager()
@@ -5431,5 +5457,192 @@ export default class GameSceneV3 extends Phaser.Scene {
     const g = (accentColor >> 8) & 0xff
     const b = accentColor & 0xff
     this.cameras.main.flash(200, r, g, b, true)
+  }
+
+  // ═══════════════════════════════════════
+  // INVENTORY / GEAR UI (I key)
+  // ═══════════════════════════════════════
+  private toggleInventory() {
+    if (this.inventoryUI) {
+      this.closeInventory()
+    } else {
+      this.openInventory()
+    }
+  }
+
+  private closeInventory() {
+    if (!this.inventoryUI) return
+    this.inventoryUI.forEach((el: any) => el.destroy())
+    this.inventoryUI = null
+    this.physics.resume()
+  }
+
+  private openInventory() {
+    if (this.inventoryUI || this.skillTreeUI || this.shopUI.isShopOpen() || this.casinoUI.isOpen || this.isPaused || this.isGameOver) return
+
+    this.physics.pause()
+    const uiElements: any[] = []
+    const sw = this.scale.width
+    const sh = this.scale.height
+    const cx = sw / 2
+    const cy = sh / 2
+
+    // Overlay
+    const overlay = this.add.rectangle(cx, cy, sw * 2, sh * 2, 0x000000, 0.75)
+      .setScrollFactor(0).setDepth(8000)
+    uiElements.push(overlay)
+
+    // Panel
+    const pw = Math.min(750, sw * 0.9)
+    const ph = Math.min(550, sh * 0.85)
+    const panel = this.add.rectangle(cx, cy, pw, ph, 0x0d1b2a, 0.95)
+      .setScrollFactor(0).setDepth(8001).setStrokeStyle(2, 0x00d9ff, 0.8)
+    uiElements.push(panel)
+
+    // Title
+    const title = this.add.text(cx, cy - ph / 2 + 25, 'GEAR & ITEMS', {
+      fontSize: '28px', fontStyle: 'bold', color: '#00d9ff',
+      stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(8002)
+    uiElements.push(title)
+
+    // Close hint
+    const closeHint = this.add.text(cx + pw / 2 - 10, cy - ph / 2 + 12, 'I / ESC to close', {
+      fontSize: '12px', color: '#88c0d0',
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(8002)
+    uiElements.push(closeHint)
+
+    const leftX = cx - pw / 2 + 25
+    let curY = cy - ph / 2 + 60
+
+    // ─── COLLECTED ITEMS ───
+    const collectedLabel = this.add.text(leftX, curY, `COLLECTED ITEMS (${this.collectedItemIds.length})`, {
+      fontSize: '16px', fontStyle: 'bold', color: '#f39c12',
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+    uiElements.push(collectedLabel)
+    curY += 28
+
+    if (this.collectedItemIds.length === 0) {
+      const noItems = this.add.text(leftX + 10, curY, 'No items collected yet. Kill enemies to find drops!', {
+        fontSize: '13px', color: '#7f8c8d',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(noItems)
+      curY += 24
+    } else {
+      // Show collected items in a grid
+      const colWidth = Math.floor((pw - 60) / 3)
+      let col = 0
+      for (const itemId of this.collectedItemIds) {
+        const itemDef = ITEM_POOL.find(i => i.id === itemId)
+        if (!itemDef) continue
+
+        const rarityColors: Record<string, string> = {
+          common: '#95a5a6', uncommon: '#2ecc71', rare: '#3498db', epic: '#9b59b6', legendary: '#ffd700'
+        }
+        const color = rarityColors[itemDef.rarity] || '#ffffff'
+        const ix = leftX + 10 + col * colWidth
+        const itemText = this.add.text(ix, curY, `${itemDef.name}`, {
+          fontSize: '12px', color,
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(itemText)
+
+        const descText = this.add.text(ix, curY + 14, itemDef.description, {
+          fontSize: '10px', color: '#7f8c8d',
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(descText)
+
+        col++
+        if (col >= 3) { col = 0; curY += 32 }
+      }
+      if (col > 0) curY += 32
+    }
+
+    curY += 10
+
+    // ─── ITEM SETS ───
+    const setsLabel = this.add.text(leftX, curY, 'ITEM SETS', {
+      fontSize: '16px', fontStyle: 'bold', color: '#00d9ff',
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+    uiElements.push(setsLabel)
+    curY += 28
+
+    const setProgress = getSetProgress(this.collectedItemIds)
+    for (const sp of setProgress) {
+      const setColor = `#${sp.set.color.toString(16).padStart(6, '0')}`
+      const owned = sp.piecesOwned
+      const total = sp.totalPieces
+
+      // Set name + progress
+      const setHeader = this.add.text(leftX + 10, curY, `${sp.set.icon} ${sp.set.name}  (${owned}/${total})`, {
+        fontSize: '14px', fontStyle: 'bold', color: owned > 0 ? setColor : '#555',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(setHeader)
+      curY += 20
+
+      // Show individual items in the set
+      for (const itemId of sp.set.itemIds) {
+        const itemDef = ITEM_POOL.find(i => i.id === itemId)
+        const hasItem = sp.ownedItems.includes(itemId)
+        const mark = hasItem ? '✓' : '○'
+        const itemColor = hasItem ? '#2ecc71' : '#555'
+        const itemName = itemDef ? itemDef.name : itemId
+        const itemText = this.add.text(leftX + 20, curY, `${mark} ${itemName}`, {
+          fontSize: '11px', color: itemColor,
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(itemText)
+        curY += 16
+      }
+
+      // Show bonuses
+      for (const bonus of sp.set.bonuses) {
+        const isActive = owned >= bonus.pieces
+        const bonusText = this.add.text(leftX + 20, curY, `(${bonus.pieces}pc) ${bonus.description}`, {
+          fontSize: '11px', fontStyle: isActive ? 'bold' : 'normal',
+          color: isActive ? '#2ecc71' : '#666',
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(bonusText)
+        curY += 16
+      }
+
+      curY += 8
+    }
+
+    // ─── WEAPON MASTERY ───
+    curY = Math.min(curY, cy + ph / 2 - 120) // Clamp if needed
+    const masteryLabel = this.add.text(leftX, curY, 'WEAPON MASTERY', {
+      fontSize: '16px', fontStyle: 'bold', color: '#e74c3c',
+    }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+    uiElements.push(masteryLabel)
+    curY += 28
+
+    const allMastery = weaponMastery.getAllMasteryData()
+    const masteryWithKills = allMastery.filter(m => m.bonus.kills > 0)
+    if (masteryWithKills.length === 0) {
+      const noMastery = this.add.text(leftX + 10, curY, 'Kill enemies to level up weapon mastery!', {
+        fontSize: '13px', color: '#7f8c8d',
+      }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+      uiElements.push(noMastery)
+    } else {
+      const colW = Math.floor((pw - 60) / 2)
+      let mCol = 0
+      for (const m of masteryWithKills) {
+        const rankColor = `#${m.bonus.rank.color.toString(16).padStart(6, '0')}`
+        const mx = leftX + 10 + mCol * colW
+        const mText = this.add.text(mx, curY, `${m.bonus.rank.icon} ${m.weaponName}: ${m.bonus.rank.name}`, {
+          fontSize: '12px', color: rankColor,
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(mText)
+
+        const killsText = this.add.text(mx, curY + 14, `${m.bonus.kills} kills — +${m.bonus.rank.damageBonusPct}% dmg`, {
+          fontSize: '10px', color: '#88c0d0',
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(8002)
+        uiElements.push(killsText)
+
+        mCol++
+        if (mCol >= 2) { mCol = 0; curY += 32 }
+      }
+    }
+
+    this.inventoryUI = uiElements
   }
 }

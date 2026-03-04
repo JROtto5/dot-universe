@@ -340,6 +340,7 @@ export default function Home() {
           <div className="control-line">E - Casino</div>
           <div className="control-line" style={{ color: '#f39c12' }}>T - Skill Tree</div>
           <div className="control-line" style={{ color: '#2ecc71', fontWeight: 'bold' }}>B - Shop</div>
+          <div className="control-line" style={{ color: '#00d9ff' }}>I - Inventory/Gear</div>
           <div className="control-line" style={{ color: '#e74c3c' }}>ESC - Pause Menu</div>
           <div className="control-line" style={{ fontSize: '11px', color: '#888' }}>Space/Q/F - Abilities</div>
         </div>
