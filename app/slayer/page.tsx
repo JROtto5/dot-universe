@@ -149,20 +149,13 @@ export default function Home() {
     genre: ['Roguelike', 'Action', 'Dungeon Crawler'],
     gamePlatform: 'Web browser',
     applicationCategory: 'Game',
-    url: 'https://dotslayer.vercel.app',
+    url: 'https://www.dotslayer.live/slayer',
     operatingSystem: 'Any (Web browser)',
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
       availability: 'https://schema.org/InStock',
-    },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.8',
-      ratingCount: '1000',
-      bestRating: '5',
-      worstRating: '1',
     },
     author: {
       '@type': 'Organization',

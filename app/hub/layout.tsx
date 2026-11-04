@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Dot Universe Game Hub',
     description: 'Access all Dot Universe games from one place. Track your progress and synergy bonuses!',
-    url: 'https://dotslayer.vercel.app/hub',
+    url: 'https://www.dotslayer.live/hub',
   },
   alternates: {
-    canonical: 'https://dotslayer.vercel.app/hub',
+    canonical: 'https://www.dotslayer.live/hub',
   },
 }
 

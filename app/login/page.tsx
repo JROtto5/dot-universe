@@ -326,22 +326,6 @@ export default function LoginPage() {
           ))}
         </div>
 
-        {/* Testimonial */}
-        <div style={{
-          marginTop: '20px',
-          padding: '15px 20px',
-          background: 'rgba(0, 217, 255, 0.05)',
-          borderRadius: '12px',
-          borderLeft: '3px solid #00d9ff',
-        }}>
-          <p style={{ color: '#aaa', fontSize: '0.9rem', margin: 0, fontStyle: 'italic', lineHeight: 1.6 }}>
-            "Finally a browser roguelike that doesn't feel like a mobile port. The synergy system is genius!"
-          </p>
-          <p style={{ color: '#00d9ff', fontSize: '0.8rem', margin: '10px 0 0 0', fontWeight: 700 }}>
-            - r/WebGames user
-          </p>
-        </div>
-
         {/* Back to Home */}
         <div style={{ textAlign: 'center', marginTop: '25px' }}>
           <button

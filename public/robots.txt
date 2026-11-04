@@ -1,11 +1,11 @@
 # Dot Universe - Browser Games
-# https://dotslayer.vercel.app
+# https://www.dotslayer.live
 
 User-agent: *
 Allow: /
 
 # Sitemaps
-Sitemap: https://dotslayer.vercel.app/sitemap.xml
+Sitemap: https://www.dotslayer.live/sitemap.xml
 
 # Crawl-delay for polite bots
 Crawl-delay: 1

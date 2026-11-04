@@ -22,7 +22,7 @@ export function SocialShare({ data, onClose, compact = false }: SocialShareProps
   const [copied, setCopied] = useState(false)
   const [showModal, setShowModal] = useState(!compact)
 
-  const shareUrl = data.url || 'https://dotslayer.vercel.app'
+  const shareUrl = data.url || 'https://www.dotslayer.live'
 
   const shareText = data.game === 'slayer'
     ? `I just reached Floor ${data.floor} with ${data.score?.toLocaleString()} points in DotSlayer! Can you beat my score? Play free at ${shareUrl}`

@@ -5,10 +5,10 @@
   "private": true,
   "author": "Dot Universe Team",
   "license": "MIT",
-  "homepage": "https://dotslayer.vercel.app",
+  "homepage": "https://www.dotslayer.live",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JROtto5/MineWeb.git"
+    "url": "https://github.com/JROtto5/dot-universe.git"
   },
   "keywords": [
     "game",

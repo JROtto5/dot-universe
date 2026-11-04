@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Dot Clicker - Idle Incremental Game',
     description: '20+ buildings, 7 prestige tiers, ascension system. Build your dot empire! Free to play.',
-    url: 'https://dotslayer.vercel.app/clicker',
+    url: 'https://www.dotslayer.live/clicker',
     images: ['/og-clicker.png'],
   },
   twitter: {
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     description: 'Prestige system, ascension, offline progress. Play free!',
   },
   alternates: {
-    canonical: 'https://dotslayer.vercel.app/clicker',
+    canonical: 'https://www.dotslayer.live/clicker',
   },
 }
 

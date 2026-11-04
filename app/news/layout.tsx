@@ -7,10 +7,10 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Dot Universe News & Updates',
     description: 'Latest updates, patch notes, and new features for DotSlayer and Dot Clicker.',
-    url: 'https://dotslayer.vercel.app/news',
+    url: 'https://www.dotslayer.live/news',
   },
   alternates: {
-    canonical: 'https://dotslayer.vercel.app/news',
+    canonical: 'https://www.dotslayer.live/news',
   },
 }
 

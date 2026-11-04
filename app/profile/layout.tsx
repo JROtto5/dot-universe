@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'My Dot Universe Profile',
     description: 'Check out my gaming stats and achievements in Dot Universe!',
-    url: 'https://dotslayer.vercel.app/profile',
+    url: 'https://www.dotslayer.live/profile',
   },
   robots: {
     index: false, // Don't index user profiles

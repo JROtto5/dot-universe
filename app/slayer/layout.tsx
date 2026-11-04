@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'DotSlayer - Competitive Browser Roguelike',
     description: 'Battle 100 floors of procedurally generated action! 20+ enemies, skill trees, global leaderboards. Play free now!',
-    url: 'https://dotslayer.vercel.app/slayer',
+    url: 'https://www.dotslayer.live/slayer',
     images: ['/og-slayer.png'],
   },
   twitter: {
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     description: '100 floors, 20+ enemies, global leaderboards. Play free!',
   },
   alternates: {
-    canonical: 'https://dotslayer.vercel.app/slayer',
+    canonical: 'https://www.dotslayer.live/slayer',
   },
 }
 

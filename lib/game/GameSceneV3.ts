@@ -5839,7 +5839,7 @@ export default class GameSceneV3 extends Phaser.Scene {
     const shareMessage = victory
       ? `🏆 Victory in DotSlayer! Floor ${this.runStats.stagesCompleted} | $${score.toLocaleString()}`
       : `💀 Floor ${this.runStats.stagesCompleted} in DotSlayer | $${score.toLocaleString()}`
-    const shareUrl = 'https://dotslayer.vercel.app'
+    const shareUrl = 'https://www.dotslayer.live'
 
     const shareBtnSize = 36
     const shareSpacing = 50

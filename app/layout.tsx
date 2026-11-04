@@ -54,14 +54,14 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL('https://dotslayer.vercel.app'),
+  metadataBase: new URL('https://www.dotslayer.live'),
   alternates: {
-    canonical: 'https://dotslayer.vercel.app',
+    canonical: 'https://www.dotslayer.live',
   },
   openGraph: {
     title: 'Dot Universe - Free Browser Games',
     description: 'DotSlayer roguelike action + Dot Clicker idle progression. Two games, one universe. Cross-game synergy bonuses! Play free in your browser.',
-    url: 'https://dotslayer.vercel.app',
+    url: 'https://www.dotslayer.live',
     siteName: 'Dot Universe',
     locale: 'en_US',
     type: 'website',
@@ -117,27 +117,27 @@ const jsonLd = {
   '@graph': [
     {
       '@type': 'WebSite',
-      '@id': 'https://dotslayer.vercel.app/#website',
-      url: 'https://dotslayer.vercel.app',
+      '@id': 'https://www.dotslayer.live/#website',
+      url: 'https://www.dotslayer.live',
       name: 'Dot Universe',
       description: 'Free browser games - DotSlayer roguelike and Dot Clicker idle game',
       publisher: {
-        '@id': 'https://dotslayer.vercel.app/#organization',
+        '@id': 'https://www.dotslayer.live/#organization',
       },
       potentialAction: {
         '@type': 'SearchAction',
-        target: 'https://dotslayer.vercel.app/?q={search_term_string}',
+        target: 'https://www.dotslayer.live/?q={search_term_string}',
         'query-input': 'required name=search_term_string',
       },
     },
     {
       '@type': 'Organization',
-      '@id': 'https://dotslayer.vercel.app/#organization',
+      '@id': 'https://www.dotslayer.live/#organization',
       name: 'Dot Universe',
-      url: 'https://dotslayer.vercel.app',
+      url: 'https://www.dotslayer.live',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://dotslayer.vercel.app/logo.png',
+        url: 'https://www.dotslayer.live/logo.png',
       },
       sameAs: [
         'https://twitter.com/dotuniverse',
@@ -146,10 +146,10 @@ const jsonLd = {
     },
     {
       '@type': 'VideoGame',
-      '@id': 'https://dotslayer.vercel.app/slayer#game',
+      '@id': 'https://www.dotslayer.live/slayer#game',
       name: 'DotSlayer',
       description: 'Competitive browser roguelike with 100 procedurally generated floors, skill trees, 20+ enemy types, and global leaderboards.',
-      url: 'https://dotslayer.vercel.app/slayer',
+      url: 'https://www.dotslayer.live/slayer',
       genre: ['Roguelike', 'Action', 'Shooter'],
       gamePlatform: 'Web Browser',
       applicationCategory: 'Game',
@@ -159,20 +159,13 @@ const jsonLd = {
         price: '0',
         priceCurrency: 'USD',
       },
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: '4.5',
-        ratingCount: '150',
-        bestRating: '5',
-        worstRating: '1',
-      },
     },
     {
       '@type': 'VideoGame',
-      '@id': 'https://dotslayer.vercel.app/clicker#game',
+      '@id': 'https://www.dotslayer.live/clicker#game',
       name: 'Dot Clicker',
       description: 'Idle clicker game with prestige systems, ascension mechanics, 20+ buildings, and cross-game synergy with DotSlayer.',
-      url: 'https://dotslayer.vercel.app/clicker',
+      url: 'https://www.dotslayer.live/clicker',
       genre: ['Idle', 'Clicker', 'Incremental'],
       gamePlatform: 'Web Browser',
       applicationCategory: 'Game',
@@ -182,17 +175,10 @@ const jsonLd = {
         price: '0',
         priceCurrency: 'USD',
       },
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: '4.3',
-        ratingCount: '120',
-        bestRating: '5',
-        worstRating: '1',
-      },
     },
     {
       '@type': 'FAQPage',
-      '@id': 'https://dotslayer.vercel.app/#faq',
+      '@id': 'https://www.dotslayer.live/#faq',
       mainEntity: [
         {
           '@type': 'Question',
@@ -238,14 +224,14 @@ const jsonLd = {
     },
     {
       '@type': 'HowTo',
-      '@id': 'https://dotslayer.vercel.app/#howto',
+      '@id': 'https://www.dotslayer.live/#howto',
       name: 'How to Get Started with Dot Universe',
       description: 'Quick guide to start playing free browser games on Dot Universe',
       step: [
         {
           '@type': 'HowToStep',
           name: 'Visit Dot Universe',
-          text: 'Go to dotslayer.vercel.app in any web browser',
+          text: 'Go to www.dotslayer.live in any web browser',
         },
         {
           '@type': 'HowToStep',

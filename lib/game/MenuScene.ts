@@ -186,6 +186,89 @@ export default class MenuScene extends Phaser.Scene {
     this.saveManager = SaveManager.getInstance()
   }
 
+  /**
+   * True while this scene is still running. Async callbacks (leaderboard /
+   * save fetches) can resolve after the scene or the whole game was destroyed
+   * (e.g. React strict-mode remount, navigating away), at which point
+   * `this.scene` (the ScenePlugin) has already been torn down and calling
+   * `this.scene.isActive()` throws.
+   */
+  private isSceneAlive(): boolean {
+    try {
+      return !!this.sys && !!this.sys.settings && this.sys.isActive() && !!this.add
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Single source of truth for the vertical layout of the start menu.
+   * Sections are stacked bottom-up (utility buttons, save slots, optional game
+   * modes) and the leaderboard panel gets whatever space is left below the
+   * title block, so the sections can never overlap regardless of viewport.
+   */
+  private getMenuLayout() {
+    const { width, height } = this.scale
+    const isSmallScreen = width < 600
+
+    // Header: title (y=80), subtitle (y=140), prestige / weekly lines (y=170/195)
+    const contentTop = (prestigeSystem.getPrestigeLevel() > 0 ? 195 : 170) + 20
+
+    // Footer: utility button row
+    const utilityBtnSize = isSmallScreen ? 36 : 44
+    const utilityY = height - (isSmallScreen ? 40 : 50)
+    const utilityTop = utilityY - utilityBtnSize / 2
+
+    // Save slots sit directly above the utility row
+    const slotHeight = isSmallScreen ? 90 : 110
+    const slotY = utilityTop - 16 - slotHeight / 2
+    const saveLabelY = slotY - slotHeight / 2 - 22
+    let sectionTop = saveLabelY - 18
+
+    // Optional game-mode row above the save slots
+    const showModes = endlessMode.isUnlocked() || challengeModes.getAllModes().some(m => m.unlocked)
+    let modesButtonY = 0
+    if (showModes) {
+      const modeBtnHeight = isSmallScreen ? 45 : 55
+      const hasBestEndless = endlessMode.isUnlocked() && endlessMode.getBestFloor() > 0
+      const modesBottom = sectionTop - 12 - (hasBestEndless ? 22 : 0)
+      modesButtonY = modesBottom - modeBtnHeight / 2
+      // "GAME MODES" label is drawn 40px above the button centre
+      sectionTop = modesButtonY - 40 - 14
+    }
+
+    // Leaderboard fills the remaining gap (capped at 380px, centred in the gap)
+    const gapTop = contentTop
+    const gapBottom = sectionTop - 14
+    const panelHeight = Math.max(0, Math.min(380, gapBottom - gapTop))
+    const panelY = (gapTop + gapBottom) / 2
+    const panelTop = panelY - panelHeight / 2
+
+    const entrySpacing = isSmallScreen ? 28 : 32
+    const firstEntryOffset = 60
+    const maxEntries = Math.min(
+      isSmallScreen ? 8 : 10,
+      Math.max(1, Math.floor((panelHeight - firstEntryOffset - 14) / entrySpacing) + 1)
+    )
+
+    return {
+      isSmallScreen,
+      utilityY,
+      slotY,
+      slotHeight,
+      saveLabelY,
+      showModes,
+      modesButtonY,
+      panelY,
+      panelTop,
+      panelHeight,
+      showLeaderboard: panelHeight >= 110,
+      entrySpacing,
+      firstEntryOffset,
+      maxEntries,
+    }
+  }
+
   private createBackground() {
     const { width, height } = this.scale
 
@@ -256,8 +339,10 @@ export default class MenuScene extends Phaser.Scene {
   private createGameModeButtons() {
     const { width, height } = this.scale
     const centerX = width / 2
-    const isSmallScreen = width < 600
-    const buttonY = height - (isSmallScreen ? 320 : 350)
+    const layout = this.getMenuLayout()
+    const isSmallScreen = layout.isSmallScreen
+    // buttonY is the historical anchor: label at buttonY - 30, buttons at buttonY + 10
+    const buttonY = layout.modesButtonY - 10
 
     // Only show if any modes are unlocked
     const endlessUnlocked = endlessMode.isUnlocked()
@@ -349,16 +434,20 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private async loadAndDisplayLeaderboard() {
-    const { width, height } = this.scale
+    const { width } = this.scale
     const centerX = width / 2
-    const centerY = height / 2
-    const isSmallScreen = width < 600
+    const layout = this.getMenuLayout()
+    const isSmallScreen = layout.isSmallScreen
+
+    // Not enough vertical room (very short viewport): skip the panel rather
+    // than drawing it on top of the save slots.
+    if (!layout.showLeaderboard) return
 
     // Leaderboard panel background - responsive sizing
     const panelWidth = Math.min(700, width * 0.9)
-    const panelHeight = Math.min(380, height * 0.45)
+    const panelHeight = layout.panelHeight
     const panelX = centerX
-    const panelY = centerY - 30
+    const panelY = layout.panelY
 
     const panel = this.add.rectangle(panelX, panelY, panelWidth, panelHeight, COLORS.panel, 0.9)
     panel.setStrokeStyle(2, COLORS.accent, 0.5)
@@ -386,24 +475,23 @@ export default class MenuScene extends Phaser.Scene {
     // Clear existing entries
     this.leaderboardContainer.removeAll(true)
 
-    const { width, height } = this.scale
+    const { width } = this.scale
     const centerX = width / 2
-    const centerY = height / 2
-    const isSmallScreen = width < 600
-    const panelHeight = Math.min(380, height * 0.45)
-    const startY = centerY - 30 - panelHeight/2 + 60
-    const entrySpacing = isSmallScreen ? 28 : 32
+    const layout = this.getMenuLayout()
+    const isSmallScreen = layout.isSmallScreen
+    const startY = layout.panelTop + layout.firstEntryOffset
+    const entrySpacing = layout.entrySpacing
+    const messageY = layout.panelY + 10
 
     try {
-      // Limit entries on small screens
-      const maxEntries = isSmallScreen ? 8 : 10
-      const topScores = await this.leaderboardService.getTopScores(maxEntries)
+      // Only fetch as many entries as fit in the panel
+      const topScores = await this.leaderboardService.getTopScores(layout.maxEntries)
 
       // Check if scene is still active after async operation
-      if (!this.scene || !this.scene.isActive() || !this.add) return
+      if (!this.isSceneAlive()) return
 
       if (topScores.length === 0) {
-        const noScoresText = this.add.text(centerX, centerY - 20, 'No scores yet!', {
+        const noScoresText = this.add.text(centerX, messageY, 'No scores yet!', {
           fontSize: isSmallScreen ? '16px' : '20px',
           color: `#${COLORS.text.toString(16).padStart(6, '0')}`,
         }).setOrigin(0.5)
@@ -419,9 +507,9 @@ export default class MenuScene extends Phaser.Scene {
       console.error('Failed to load leaderboard:', error)
 
       // Check if scene is still active before showing error
-      if (!this.scene || !this.scene.isActive() || !this.add) return
+      if (!this.isSceneAlive()) return
 
-      const errorText = this.add.text(centerX, centerY - 20, 'Failed to load', {
+      const errorText = this.add.text(centerX, messageY, 'Failed to load', {
         fontSize: isSmallScreen ? '16px' : '20px',
         color: `#${COLORS.highlight.toString(16).padStart(6, '0')}`,
       }).setOrigin(0.5)
@@ -482,13 +570,14 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   private async loadAndDisplaySaveSlots() {
-    const { width, height } = this.scale
+    const { width } = this.scale
     const centerX = width / 2
-    const isSmallScreen = width < 600
-    const bottomY = height - (isSmallScreen ? 180 : 200)
+    const layout = this.getMenuLayout()
+    const isSmallScreen = layout.isSmallScreen
+    const bottomY = layout.slotY
 
     // Save slots label - positioned above slots
-    const label = this.add.text(centerX, bottomY - 90, 'SAVE SLOTS', {
+    const label = this.add.text(centerX, layout.saveLabelY, 'SAVE SLOTS', {
       fontSize: isSmallScreen ? '18px' : '24px',
       fontStyle: 'bold',
       color: `#${COLORS.accent2.toString(16).padStart(6, '0')}`,
@@ -515,7 +604,7 @@ export default class MenuScene extends Phaser.Scene {
       const saves = await this.saveManager.listSaves(this.userId)
 
       // Check if scene is still active after async operation
-      if (!this.scene || !this.scene.isActive() || !this.add) return
+      if (!this.isSceneAlive()) return
 
       const savesBySlot = new Map<number, SaveData>()
       saves.forEach(save => savesBySlot.set(save.save_slot, save))
